@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Outer electron orbit -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="currentColor" stroke-width="24" opacity="0.2"/>
+
+  <!-- Nucleus -->
+  <circle cx="256" cy="256" r="80" fill="currentColor"/>
+
+  <!-- Electron -->
+  <circle cx="456" cy="256" r="32" fill="currentColor"/>
+</svg>
