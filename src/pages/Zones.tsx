@@ -1039,12 +1039,14 @@ function RecordForm({
 function ZoneRecordsView({
   zone,
   onBack,
+  onDelete,
   initialRecordName,
   initialRecordType,
   initialRecordValue,
 }: {
   zone: Zone;
   onBack: () => void;
+  onDelete: (zone: Zone) => void;
   initialRecordName?: string;
   initialRecordType?: string;
   initialRecordValue?: string;
@@ -1638,6 +1640,26 @@ function ZoneRecordsView({
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 sm:h-9 sm:w-9"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => onDelete(zone)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Zone
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="sm:size-default">
@@ -1965,6 +1987,10 @@ export default function Zones() {
     const response = await deleteZone(zoneToDelete.name);
     if (response.status === "ok") {
       toast.success(`Zone "${zoneToDelete.name}" deleted`);
+      // If we're viewing the zone being deleted, navigate back to the list
+      if (zoneName === zoneToDelete.name) {
+        navigate("/zones");
+      }
       refetch();
     } else {
       toast.error(response.errorMessage || "Failed to delete zone");
@@ -1991,13 +2017,42 @@ export default function Zones() {
   // Show zone detail view if a zone is selected
   if (selectedZone) {
     return (
-      <ZoneRecordsView
-        zone={selectedZone}
-        onBack={() => navigate("/zones")}
-        initialRecordName={recordName}
-        initialRecordType={recordType}
-        initialRecordValue={recordValue}
-      />
+      <>
+        <ZoneRecordsView
+          zone={selectedZone}
+          onBack={() => navigate("/zones")}
+          onDelete={(z) => setZoneToDelete(z)}
+          initialRecordName={recordName}
+          initialRecordType={recordType}
+          initialRecordValue={recordValue}
+        />
+
+        {/* Delete Confirmation */}
+        <AlertDialog
+          open={!!zoneToDelete}
+          onOpenChange={() => setZoneToDelete(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Zone?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "{zoneToDelete?.name}"? This will
+                permanently delete all records in this zone. This action cannot be
+                undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete Zone
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
     );
   }
 
