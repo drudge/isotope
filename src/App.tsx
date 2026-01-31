@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -8,7 +8,6 @@ import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Zones from "@/pages/Zones";
 import Cache from "@/pages/Cache";
-import Allowed from "@/pages/Allowed";
 import Blocked from "@/pages/Blocked";
 import Apps from "@/pages/Apps";
 import DnsClient from "@/pages/DnsClient";
@@ -40,7 +39,7 @@ export default function App() {
                 element={<Zones />}
               />
               <Route path="/cache" element={<Cache />} />
-              <Route path="/allowed" element={<Allowed />} />
+              <Route path="/allowed" element={<Navigate to="/blocked?tab=allowed" replace />} />
               <Route path="/blocked" element={<Blocked />} />
               <Route path="/apps" element={<Apps />} />
               <Route path="/dns-client" element={<DnsClient />} />

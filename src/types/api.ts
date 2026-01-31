@@ -91,3 +91,22 @@ export interface ZoneListResponse {
 export interface RecordListResponse {
   records: DnsRecord[];
 }
+
+export type BlockingType = 'AnyAddress' | 'NxDomain' | 'CustomAddress';
+
+export interface BlockingSettings {
+  enableBlocking: boolean;
+  allowTxtBlockingReport: boolean;
+  blockingBypassList: string[];
+  blockingType: BlockingType;
+  blockingAnswerTtl: number;
+  customBlockingAddresses: string[];
+  blockListUrls: string[];
+  blockListUpdateIntervalHours: number;
+  blockListNextUpdatedOn: string;
+  temporaryDisableBlockingTill?: string;
+}
+
+export interface TemporaryDisableResponse {
+  temporaryDisableBlockingTill: string;
+}

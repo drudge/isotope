@@ -44,7 +44,7 @@ const mainNavItems: NavItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Zones", url: "/zones", icon: Globe },
   { title: "Cache", url: "/cache", icon: Database },
-  { title: "Allowed", url: "/allowed", icon: ShieldCheck },
+  { title: "Allowed", url: "/blocked?tab=allowed", icon: ShieldCheck },
   { title: "Blocked", url: "/blocked", icon: ShieldX },
   { title: "Apps", url: "/apps", icon: AppWindow },
   { title: "DNS Client", url: "/dns-client", icon: Network },
@@ -60,6 +60,7 @@ const systemNavItems: NavItem[] = [
 
 function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
   const location = useLocation();
+  const fullPath = location.pathname + location.search;
 
   return (
     <SidebarGroup>
@@ -67,7 +68,11 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => {
-            const isActive = location.pathname === item.url;
+            // Handle URLs with query params (e.g., /blocked?tab=allowed)
+            const itemHasQuery = item.url.includes('?');
+            const isActive = itemHasQuery
+              ? fullPath === item.url || fullPath.startsWith(item.url + '&')
+              : location.pathname === item.url && !location.search.includes('tab=');
             return (
               <SidebarMenuItem key={item.url}>
                 <SidebarMenuButton
