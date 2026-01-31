@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ServerLogs from "@/components/ServerLogs";
@@ -6,15 +6,8 @@ import QueryLogs from "@/components/QueryLogs";
 
 export default function Logs() {
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState("server");
-
-  // Handle initial tab from URL
-  useEffect(() => {
-    const tab = searchParams.get("tab");
-    if (tab === "queries") {
-      setActiveTab("queries");
-    }
-  }, [searchParams]);
+  const initialTab = searchParams.get("tab") === "queries" ? "queries" : "server";
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   return (
     <div className="flex flex-col h-full min-h-0">
