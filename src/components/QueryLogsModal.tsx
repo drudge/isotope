@@ -106,7 +106,7 @@ export default function QueryLogsModal({
 
   // Apply initial filters and fetch when modal opens or initialFilter changes
   useEffect(() => {
-    if (!open || loadingLoggers) return;
+    if (!open || loadingLoggers || !selectedLogger) return;
 
     const newClientIp = initialFilter?.clientIpAddress || "";
     const newQname = initialFilter?.qname || "";
@@ -130,7 +130,7 @@ export default function QueryLogsModal({
       qname: newQname,
       responseType: newResponseType,
     });
-  }, [open, initialFilter?.clientIpAddress, initialFilter?.qname, initialFilter?.responseType]);
+  }, [open, loadingLoggers, selectedLogger, initialFilter?.clientIpAddress, initialFilter?.qname, initialFilter?.responseType]);
 
   // Fetch logs when filters or pagination changes (but not on initial open)
   useEffect(() => {
