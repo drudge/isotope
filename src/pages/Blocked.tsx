@@ -30,6 +30,7 @@ import {
   DomainList,
   BlockingSettingsForm,
 } from '@/components/blocking';
+import QueryLogsModal from '@/components/QueryLogsModal';
 import {
   getBlockingSettings,
   updateBlockingSettings,
@@ -58,6 +59,7 @@ export default function Blocked() {
   useDocumentTitle('DNS Blocking');
   const [searchParams, setSearchParams] = useSearchParams();
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showBlockedLogsModal, setShowBlockedLogsModal] = useState(false);
   const currentTab = (searchParams.get('tab') as TabValue) || 'lists';
 
   const {
@@ -370,7 +372,10 @@ export default function Blocked() {
             <CardContent className="space-y-6">
               {/* Stats Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="p-4 rounded-lg bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/50 dark:to-red-900/30 border border-red-200 dark:border-red-800">
+                <button
+                  onClick={() => setShowBlockedLogsModal(true)}
+                  className="p-4 rounded-lg bg-gradient-to-br from-red-50 to-red-100 dark:from-red-950/50 dark:to-red-900/30 border border-red-200 dark:border-red-800 text-left transition-all hover:shadow-md hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                >
                   <div className="flex items-center gap-2 mb-1">
                     <Ban className="h-4 w-4 text-red-600 dark:text-red-400" />
                     <span className="text-xs font-medium text-red-900 dark:text-red-100">
@@ -384,7 +389,7 @@ export default function Blocked() {
                       {totalBlocked.toLocaleString()}
                     </div>
                   )}
-                </div>
+                </button>
 
                 <div className="p-4 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/50 dark:to-blue-900/30 border border-blue-200 dark:border-blue-800">
                   <div className="flex items-center gap-2 mb-1">
@@ -619,6 +624,13 @@ export default function Blocked() {
           </div>
         </div>
       </div>
+
+      {/* Query Logs Modal for Blocked Queries */}
+      <QueryLogsModal
+        open={showBlockedLogsModal}
+        onClose={() => setShowBlockedLogsModal(false)}
+        initialFilter={{ responseType: 'Blocked' }}
+      />
     </div>
   );
 }
