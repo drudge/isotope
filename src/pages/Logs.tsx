@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ServerLogs from "@/components/ServerLogs";
 import QueryLogs from "@/components/QueryLogs";
 
 export default function Logs() {
+  useDocumentTitle("Logs");
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get("tab") === "queries" ? "queries" : "server";
   const [activeTab, setActiveTab] = useState(initialTab);

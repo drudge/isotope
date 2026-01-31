@@ -1,7 +1,9 @@
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExternalLink } from "lucide-react";
 
 export default function About() {
+  useDocumentTitle("About");
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="text-center py-8">

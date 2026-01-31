@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   Database,
   Trash2,
@@ -502,6 +503,7 @@ function CacheBrowser({ onClose }: { onClose: () => void }) {
 
 // Main Cache Management Page
 export default function Cache() {
+  useDocumentTitle("Cache");
   const [isFlushOpen, setIsFlushOpen] = useState(false);
   const [isFlushing, setIsFlushing] = useState(false);
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);

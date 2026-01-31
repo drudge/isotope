@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { ShieldCheck, Plus, Trash2, RefreshCw, Download, Upload, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ import { listAllowedZones, addAllowedZone, deleteAllowedZone, flushAllowedZones 
 import { toast } from 'sonner';
 
 export default function Allowed() {
+  useDocumentTitle("Allowed");
   const [filter, setFilter] = useState('');
   const [newDomain, setNewDomain] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);

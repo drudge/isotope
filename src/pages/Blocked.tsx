@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ShieldX, Plus, Trash2, RefreshCw, Download, Upload, Search } from 'lucide-react';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +29,7 @@ import { listBlockedZones, addBlockedZone, deleteBlockedZone, flushBlockedZones 
 import { toast } from 'sonner';
 
 export default function Blocked() {
+  useDocumentTitle("Blocked");
   const [filter, setFilter] = useState('');
   const [newDomain, setNewDomain] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);

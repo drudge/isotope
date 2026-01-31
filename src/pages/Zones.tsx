@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   Plus,
   Search,
@@ -1936,6 +1937,7 @@ export default function Zones() {
     recordType?: string;
     recordValue?: string;
   }>();
+  useDocumentTitle(zoneName ? `${zoneName} - Zones` : "Zones");
   const navigate = useNavigate();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newZoneName, setNewZoneName] = useState("");

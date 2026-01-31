@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   Line,
   LineChart,
@@ -210,6 +211,7 @@ function calculatePercentage(value: number, total: number): string {
 }
 
 export default function Dashboard() {
+  useDocumentTitle("Dashboard");
   const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState<TimeRange>("LastHour");
   const [expandedLists, setExpandedLists] = useState(false);
