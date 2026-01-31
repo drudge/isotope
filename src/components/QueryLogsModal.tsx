@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   X,
   Search,
@@ -69,6 +69,16 @@ export default function QueryLogsModal({
   const [qname, setQname] = useState("");
   const [qtype, setQtype] = useState<string>("");
 
+  // Track whether the initial filter has been applied for this modal session
+  const initialFilterApplied = useRef(false);
+
+  // Reset initialization tracking when modal closes
+  useEffect(() => {
+    if (!open) {
+      initialFilterApplied.current = false;
+    }
+  }, [open]);
+
   // Fetch available query loggers when modal opens
   useEffect(() => {
     if (!open) return;
@@ -122,6 +132,9 @@ export default function QueryLogsModal({
     setPageNumber(1);
     setSearchTerm("");
 
+    // Mark initial filter as applied before fetching
+    initialFilterApplied.current = true;
+
     // Fetch with the new filter values directly
     fetchLogsWithParams({
       pageNumber: 1,
@@ -135,6 +148,8 @@ export default function QueryLogsModal({
   // Fetch logs when filters or pagination changes (but not on initial open)
   useEffect(() => {
     if (!selectedLogger || loadingLoggers) return;
+    // Skip if initial filter hasn't been applied yet (prevents race condition)
+    if (!initialFilterApplied.current) return;
     if (
       open &&
       clientIpAddress === (initialFilter?.clientIpAddress || "") &&
