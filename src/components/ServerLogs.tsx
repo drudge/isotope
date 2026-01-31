@@ -8,6 +8,10 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Maximize2,
+  Minimize2,
+  PanelLeftClose,
+  PanelLeft,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +45,8 @@ export default function ServerLogs() {
   const [loadingContent, setLoadingContent] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedStacks, setExpandedStacks] = useState<Set<number>>(new Set());
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showMetadata, setShowMetadata] = useState(true);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -241,7 +247,7 @@ export default function ServerLogs() {
   const renderLogEntry = (entry: LogEntry, index: number) => {
     if (entry.timestamp) {
       const hasStack = entry.stackTrace && entry.stackTrace.length > 0;
-      const isExpanded = expandedStacks.has(index);
+      const isStackExpanded = expandedStacks.has(index);
 
       return (
         <div key={index}>
@@ -252,22 +258,26 @@ export default function ServerLogs() {
             <div className="w-3.5 shrink-0 flex items-start justify-center">
               {hasStack && (
                 <ChevronRight
-                  className={`h-3.5 w-3.5 mt-0.5 text-muted-foreground transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                  className={`h-3.5 w-3.5 mt-0.5 text-muted-foreground transition-transform ${isStackExpanded ? "rotate-90" : ""}`}
                 />
               )}
             </div>
-            <span className="text-muted-foreground shrink-0">
-              {entry.timestamp}
-            </span>
-            {entry.ipPort && (
-              <span className="text-cyan-500 dark:text-cyan-400 shrink-0">
-                {entry.ipPort}
-              </span>
-            )}
-            {entry.user && (
-              <span className="text-violet-500 dark:text-violet-400 shrink-0">
-                [{entry.user}]
-              </span>
+            {showMetadata && (
+              <>
+                <span className="text-muted-foreground shrink-0">
+                  {entry.timestamp}
+                </span>
+                {entry.ipPort && (
+                  <span className="text-cyan-500 dark:text-cyan-400 shrink-0">
+                    {entry.ipPort}
+                  </span>
+                )}
+                {entry.user && (
+                  <span className="text-violet-500 dark:text-violet-400 shrink-0">
+                    [{entry.user}]
+                  </span>
+                )}
+              </>
             )}
             <span
               className={
@@ -278,13 +288,13 @@ export default function ServerLogs() {
             >
               {entry.message}
             </span>
-            {hasStack && !isExpanded && (
+            {hasStack && !isStackExpanded && (
               <span className="text-muted-foreground text-[10px] ml-1">
                 ({entry.stackTrace?.length} frames)
               </span>
             )}
           </div>
-          {hasStack && isExpanded && (
+          {hasStack && isStackExpanded && (
             <div className="ml-5 pl-3 border-l border-muted-foreground/20 my-1">
               {entry.stackTrace?.map((traceLine, i) => (
                 <div
@@ -314,12 +324,13 @@ export default function ServerLogs() {
 
   // On mobile, show either the list or the viewer (not both)
   const showViewer = viewingLog !== null;
+  const showSidebar = !isExpanded;
 
   return (
-    <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 h-full min-h-0">
-      {/* Log Files List - Hidden on mobile when viewing a log */}
+    <div className={`flex flex-col lg:grid gap-4 h-full min-h-0 ${showSidebar ? "lg:grid-cols-3" : "lg:grid-cols-1"}`}>
+      {/* Log Files List - Hidden on mobile when viewing a log, or when expanded */}
       <Card
-        className={`lg:col-span-1 flex flex-col min-h-0 ${showViewer ? "hidden lg:flex" : "flex"}`}
+        className={`lg:col-span-1 flex flex-col min-h-0 ${showViewer || isExpanded ? "hidden lg:hidden" : "flex"} ${!showSidebar ? "lg:hidden" : "lg:flex"}`}
       >
         <CardContent className="p-0 flex flex-col flex-1 min-h-0">
           <div className="flex items-center justify-between gap-2 p-3 border-b shrink-0">
@@ -399,36 +410,85 @@ export default function ServerLogs() {
         </CardContent>
       </Card>
 
-      {/* Log Viewer - Full width on mobile when viewing */}
+      {/* Log Viewer - Full width on mobile when viewing, or when expanded */}
       <Card
-        className={`lg:col-span-2 flex flex-col min-h-0 ${showViewer ? "flex" : "hidden lg:flex"}`}
+        className={`${showSidebar ? "lg:col-span-2" : "lg:col-span-1"} flex flex-col min-h-0 ${showViewer || isExpanded ? "flex" : "hidden lg:flex"}`}
       >
         <CardContent className="p-0 flex flex-col flex-1 min-h-0 overflow-hidden">
           {viewingLog ? (
             <>
               {/* Viewer Header */}
               <div className="flex items-center gap-2 px-3 py-2.5 border-b shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleBack}
-                  className="h-8 w-8 lg:hidden shrink-0"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
+                {/* Back button for mobile / Sidebar toggle for desktop expanded mode */}
+                {isExpanded ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsExpanded(false)}
+                    className="h-8 w-8 shrink-0"
+                    title="Show file list"
+                  >
+                    <PanelLeft className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleBack}
+                    className="h-8 w-8 lg:hidden shrink-0"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                )}
                 <FileText className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block" />
                 <span className="font-mono text-sm font-medium truncate flex-1">
                   {viewingLog}.log
                 </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDownload(viewingLog)}
-                  className="h-8 shrink-0"
-                >
-                  <Download className="h-4 w-4 sm:mr-1.5" />
-                  <span className="hidden sm:inline">Download</span>
-                </Button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* Toggle metadata visibility */}
+                  <Button
+                    variant={showMetadata ? "outline" : "ghost"}
+                    size="sm"
+                    onClick={() => setShowMetadata(!showMetadata)}
+                    className="h-8 px-2 hidden sm:flex"
+                    title={showMetadata ? "Hide timestamp & details" : "Show timestamp & details"}
+                  >
+                    {showMetadata ? (
+                      <>
+                        <Minimize2 className="h-4 w-4 sm:mr-1.5" />
+                        <span className="hidden lg:inline">Compact</span>
+                      </>
+                    ) : (
+                      <>
+                        <Maximize2 className="h-4 w-4 sm:mr-1.5" />
+                        <span className="hidden lg:inline">Details</span>
+                      </>
+                    )}
+                  </Button>
+                  {/* Expand/collapse sidebar - desktop only */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="h-8 w-8 hidden lg:flex"
+                    title={isExpanded ? "Show file list" : "Hide file list"}
+                  >
+                    {isExpanded ? (
+                      <PanelLeft className="h-4 w-4" />
+                    ) : (
+                      <PanelLeftClose className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDownload(viewingLog)}
+                    className="h-8 shrink-0"
+                  >
+                    <Download className="h-4 w-4 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Download</span>
+                  </Button>
+                </div>
               </div>
 
               {/* Search Bar */}
