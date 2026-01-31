@@ -20,8 +20,8 @@ export async function listSessions(): Promise<ApiResponse<SessionsListResponse>>
   return apiClient.get<SessionsListResponse>('/admin/sessions/list');
 }
 
-export async function deleteSession(partialToken: string): Promise<ApiResponse<{}>> {
-  return apiClient.get<{}>(`/admin/sessions/delete?partialToken=${encodeURIComponent(partialToken)}`);
+export async function deleteSession(partialToken: string): Promise<ApiResponse<Record<string, never>>> {
+  return apiClient.get<Record<string, never>>(`/admin/sessions/delete?partialToken=${encodeURIComponent(partialToken)}`);
 }
 
 export async function createToken(
