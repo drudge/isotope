@@ -1,12 +1,12 @@
 import { apiClient } from './client';
-import type { ApiResponse, DnsServerInfo, DnsStats, ZoneListResponse, RecordListResponse } from '@/types/api';
+import type { ApiResponse, DnsServerInfo, DnsStatsResponse, ZoneListResponse, RecordListResponse } from '@/types/api';
 
 export async function getServerInfo(): Promise<ApiResponse<DnsServerInfo>> {
   return apiClient.get<DnsServerInfo>('/settings/get');
 }
 
-export async function getStats(type: 'LastHour' | 'LastDay' | 'LastWeek' | 'LastMonth' | 'LastYear' = 'LastHour'): Promise<ApiResponse<DnsStats>> {
-  return apiClient.get<DnsStats>('/dashboard/stats/get', { type, utc: 'true' });
+export async function getStats(type: 'LastHour' | 'LastDay' | 'LastWeek' | 'LastMonth' | 'LastYear' = 'LastHour'): Promise<ApiResponse<DnsStatsResponse>> {
+  return apiClient.get<DnsStatsResponse>('/dashboard/stats/get', { type, utc: 'true' });
 }
 
 export async function listZones(): Promise<ApiResponse<ZoneListResponse>> {
