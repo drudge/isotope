@@ -8,8 +8,6 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  Maximize2,
-  Minimize2,
   PanelLeftClose,
   PanelLeft,
 } from "lucide-react";
@@ -46,7 +44,6 @@ export default function ServerLogs() {
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedStacks, setExpandedStacks] = useState<Set<number>>(new Set());
   const [isExpanded, setIsExpanded] = useState(false);
-  const [showMetadata, setShowMetadata] = useState(true);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -262,22 +259,18 @@ export default function ServerLogs() {
                 />
               )}
             </div>
-            {showMetadata && (
-              <>
-                <span className="text-muted-foreground shrink-0">
-                  {entry.timestamp}
-                </span>
-                {entry.ipPort && (
-                  <span className="text-cyan-500 dark:text-cyan-400 shrink-0">
-                    {entry.ipPort}
-                  </span>
-                )}
-                {entry.user && (
-                  <span className="text-violet-500 dark:text-violet-400 shrink-0">
-                    [{entry.user}]
-                  </span>
-                )}
-              </>
+            <span className="text-muted-foreground shrink-0">
+              {entry.timestamp}
+            </span>
+            {entry.ipPort && (
+              <span className="text-cyan-500 dark:text-cyan-400 shrink-0">
+                {entry.ipPort}
+              </span>
+            )}
+            {entry.user && (
+              <span className="text-violet-500 dark:text-violet-400 shrink-0">
+                [{entry.user}]
+              </span>
             )}
             <span
               className={
@@ -419,66 +412,34 @@ export default function ServerLogs() {
             <>
               {/* Viewer Header */}
               <div className="flex items-center gap-2 px-3 py-2.5 border-b shrink-0">
-                {/* Back button for mobile / Sidebar toggle for desktop expanded mode */}
-                {isExpanded ? (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsExpanded(false)}
-                    className="h-8 w-8 shrink-0"
-                    title="Show file list"
-                  >
+                {/* Back button for mobile */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleBack}
+                  className="h-8 w-8 lg:hidden shrink-0"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                {/* Sidebar toggle for desktop */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  className="h-8 w-8 hidden lg:flex shrink-0"
+                  title={isExpanded ? "Show file list" : "Hide file list"}
+                >
+                  {isExpanded ? (
                     <PanelLeft className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleBack}
-                    className="h-8 w-8 lg:hidden shrink-0"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                )}
+                  ) : (
+                    <PanelLeftClose className="h-4 w-4" />
+                  )}
+                </Button>
                 <FileText className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block" />
                 <span className="font-mono text-sm font-medium truncate flex-1">
                   {viewingLog}.log
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
-                  {/* Toggle metadata visibility */}
-                  <Button
-                    variant={showMetadata ? "outline" : "ghost"}
-                    size="sm"
-                    onClick={() => setShowMetadata(!showMetadata)}
-                    className="h-8 px-2 hidden sm:flex"
-                    title={showMetadata ? "Hide timestamp & details" : "Show timestamp & details"}
-                  >
-                    {showMetadata ? (
-                      <>
-                        <Minimize2 className="h-4 w-4 sm:mr-1.5" />
-                        <span className="hidden lg:inline">Compact</span>
-                      </>
-                    ) : (
-                      <>
-                        <Maximize2 className="h-4 w-4 sm:mr-1.5" />
-                        <span className="hidden lg:inline">Details</span>
-                      </>
-                    )}
-                  </Button>
-                  {/* Expand/collapse sidebar - desktop only */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="h-8 w-8 hidden lg:flex"
-                    title={isExpanded ? "Show file list" : "Hide file list"}
-                  >
-                    {isExpanded ? (
-                      <PanelLeft className="h-4 w-4" />
-                    ) : (
-                      <PanelLeftClose className="h-4 w-4" />
-                    )}
-                  </Button>
                   <Button
                     variant="outline"
                     size="sm"

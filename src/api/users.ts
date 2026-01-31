@@ -81,6 +81,6 @@ export async function setUserDetails(params: {
   return apiClient.get<UserDetails>(`/admin/users/set?${queryParams.toString()}`);
 }
 
-export async function deleteUser(username: string): Promise<ApiResponse<{}>> {
-  return apiClient.get<{}>(`/admin/users/delete?user=${encodeURIComponent(username)}`);
+export async function deleteUser(username: string): Promise<ApiResponse<Record<string, never>>> {
+  return apiClient.get<Record<string, never>>(`/admin/users/delete?user=${encodeURIComponent(username)}`);
 }
