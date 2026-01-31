@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Sessions from '@/components/admin/Sessions';
 import Users from '@/components/admin/Users';
@@ -6,6 +7,7 @@ import Groups from '@/components/admin/Groups';
 import Permissions from '@/components/admin/Permissions';
 
 export default function Administration() {
+  useDocumentTitle("Administration");
   const [activeTab, setActiveTab] = useState('sessions');
 
   return (

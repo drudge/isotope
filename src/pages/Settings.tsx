@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +13,7 @@ import { changePassword } from '@/api/auth';
 import { toast } from 'sonner';
 
 export default function Settings() {
+  useDocumentTitle("Settings");
   const { user } = useAuth();
   const { data: serverInfo, isLoading } = useApi(() => getServerInfo(), []);
 

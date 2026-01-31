@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Search, Sparkles, Copy, Check, ChevronDown } from 'lucide-react';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,6 +48,7 @@ const PRESET_SERVERS = [
 ];
 
 export default function DnsClient() {
+  useDocumentTitle("DNS Client");
   const [domain, setDomain] = useState('');
   const [recordType, setRecordType] = useState('A');
   const [server, setServer] = useState('this-server');

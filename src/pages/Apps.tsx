@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, Store, Upload, Settings, Trash2, Package, Download } from 'lucide-react';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +31,7 @@ import {
 import { toast } from 'sonner';
 
 export default function Apps() {
+  useDocumentTitle("Apps");
   const [installedApps, setInstalledApps] = useState<InstalledApp[]>([]);
   const [storeApps, setStoreApps] = useState<StoreApp[]>([]);
   const [loading, setLoading] = useState(true);

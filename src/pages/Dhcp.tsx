@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, Plus, Power, PowerOff, Trash2, Settings2 } from 'lucide-react';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,7 @@ import {
 import { toast } from 'sonner';
 
 export default function Dhcp() {
+  useDocumentTitle("DHCP");
   const [scopes, setScopes] = useState<DhcpScope[]>([]);
   const [leases, setLeases] = useState<DhcpLease[]>([]);
   const [loading, setLoading] = useState(true);
