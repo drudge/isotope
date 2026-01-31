@@ -43,6 +43,14 @@ export interface DnsStats {
   blockListZones: number;
 }
 
+export interface DnsStatsResponse {
+  stats: DnsStats;
+  mainChartData?: unknown;
+  queryResponseChartData?: unknown;
+  queryTypeChartData?: unknown;
+  protocolTypeChartData?: unknown;
+}
+
 export interface Zone {
   name: string;
   type: 'Primary' | 'Secondary' | 'Stub' | 'Forwarder' | 'SecondaryForwarder' | 'Catalog' | 'SecondaryCatalog';

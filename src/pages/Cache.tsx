@@ -512,8 +512,9 @@ export default function Cache() {
     refetch,
   } = useApi(() => getStats("LastHour"), []);
 
-  const cachedEntries = statsData?.cachedEntries ?? 0;
-  const totalCached = statsData?.totalCached ?? 0;
+  const stats = statsData?.stats;
+  const cachedEntries = stats?.cachedEntries ?? 0;
+  const totalCached = stats?.totalCached ?? 0;
 
   const handleFlush = async () => {
     setIsFlushing(true);
