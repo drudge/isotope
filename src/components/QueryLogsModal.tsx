@@ -71,11 +71,14 @@ export default function QueryLogsModal({
 
   // Track whether the initial filter has been applied for this modal session
   const initialFilterApplied = useRef(false);
+  // Flag to skip the next filter effect run (prevents race condition)
+  const skipNextFilterEffect = useRef(false);
 
   // Reset initialization tracking when modal closes
   useEffect(() => {
     if (!open) {
       initialFilterApplied.current = false;
+      skipNextFilterEffect.current = false;
     }
   }, [open]);
 
@@ -132,8 +135,9 @@ export default function QueryLogsModal({
     setPageNumber(1);
     setSearchTerm("");
 
-    // Mark initial filter as applied before fetching
+    // Mark initial filter as applied and skip the next filter effect run
     initialFilterApplied.current = true;
+    skipNextFilterEffect.current = true;
 
     // Fetch with the new filter values directly
     fetchLogsWithParams({
@@ -150,6 +154,11 @@ export default function QueryLogsModal({
     if (!selectedLogger || loadingLoggers) return;
     // Skip if initial filter hasn't been applied yet (prevents race condition)
     if (!initialFilterApplied.current) return;
+    // Skip this run if initial filter effect just executed (both effects triggered by same state change)
+    if (skipNextFilterEffect.current) {
+      skipNextFilterEffect.current = false;
+      return;
+    }
     if (
       open &&
       clientIpAddress === (initialFilter?.clientIpAddress || "") &&
