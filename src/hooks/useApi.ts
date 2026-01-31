@@ -27,7 +27,8 @@ export function useApi<T>(
         // Technitium API wraps data in 'response' property, or at root for some endpoints
         const data = response.response ?? response;
         // Remove status/errorMessage from data if present at root
-        const { status: _, errorMessage: __, response: ___, ...rest } = data as Record<string, unknown>;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { status: _status, errorMessage: _errorMessage, response: _response, ...rest } = data as Record<string, unknown>;
         const finalData = Object.keys(rest).length > 0 ? rest : data;
         setState({ data: finalData as T, error: null, isLoading: false });
       } else {

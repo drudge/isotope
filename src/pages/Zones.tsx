@@ -1080,7 +1080,7 @@ function ZoneRecordsView({
   const { data: appsData } = useApi(() => listApps(), []);
   const installedApps = appsData?.apps ?? [];
 
-  // Open edit dialog if URL has record params
+  // Open edit dialog if URL has record params (runs once when records load)
   useEffect(() => {
     if (
       initialRecordName &&
@@ -1097,7 +1097,51 @@ function ZoneRecordsView({
           formatRData(r) === decodedValue,
       );
       if (record) {
-        handleEditClick(record);
+        // Inline the edit click logic to avoid dependency issues
+        const value = formatRData(record);
+        const editData: RecordFormData & { original: DnsRecord } = {
+          original: record,
+          type: record.type,
+          name: record.name,
+          ttl: record.ttl.toString(),
+          value,
+          comments: record.comments || "",
+          expiryTtl: record.expiryTtl?.toString() || "0",
+          ptr: false,
+          createPtrZone: false,
+        };
+
+        if (record.type === "APP") {
+          editData.appName = String(record.rData.appName || "");
+          editData.classPath = String(record.rData.classPath || "");
+          editData.recordData = String(record.rData.recordData || "");
+        }
+
+        if (record.type === "SOA") {
+          editData.primaryNameServer = String(record.rData.primaryNameServer || "");
+          editData.responsiblePerson = String(record.rData.responsiblePerson || "");
+          editData.serial = String(record.rData.serial || "");
+          editData.refresh = String(record.rData.refresh || "");
+          editData.retry = String(record.rData.retry || "");
+          editData.expire = String(record.rData.expire || "");
+          editData.minimum = String(record.rData.minimum || "");
+          editData.useSerialDateScheme = Boolean(record.rData.useSerialDateScheme);
+        }
+
+        if (record.type === "FWD") {
+          editData.protocol = String(record.rData.protocol || "Udp");
+          editData.forwarder = String(record.rData.forwarder || "");
+          editData.forwarderPriority = String(record.rData.forwarderPriority || "0");
+          editData.dnssecValidation = Boolean(record.rData.dnssecValidation);
+          editData.proxyType = String(record.rData.proxyType || "DefaultProxy");
+          editData.proxyAddress = String(record.rData.proxyAddress || "");
+          editData.proxyPort = String(record.rData.proxyPort || "");
+          editData.proxyUsername = String(record.rData.proxyUsername || "");
+          editData.proxyPassword = String(record.rData.proxyPassword || "");
+        }
+
+        setEditRecord(editData); // eslint-disable-line react-hooks/set-state-in-effect
+        setIsEditOpen(true);
       }
     }
   }, [
@@ -1151,13 +1195,14 @@ function ZoneRecordsView({
       case "NS":
         rdata = { nameServer: newRecord.value };
         break;
-      case "MX":
+      case "MX": {
         const [pref, exchange] = newRecord.value.split(" ");
         rdata = {
           preference: pref || "10",
           exchange: exchange || newRecord.value,
         };
         break;
+      }
       case "TXT":
         rdata = { text: newRecord.value };
         break;
@@ -1395,13 +1440,14 @@ function ZoneRecordsView({
       case "NS":
         rdata = { nameServer: editRecord.value };
         break;
-      case "MX":
+      case "MX": {
         const [pref, exchange] = editRecord.value.split(" ");
         rdata = {
           preference: pref || "10",
           exchange: exchange || editRecord.value,
         };
         break;
+      }
       case "TXT":
         rdata = { text: editRecord.value };
         break;

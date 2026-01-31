@@ -22,10 +22,10 @@ export async function downloadLog(fileName: string): Promise<Blob> {
   return response.blob();
 }
 
-export async function deleteLog(fileName: string): Promise<ApiResponse<{}>> {
-  return apiClient.get<{}>(`/logs/delete?fileName=${encodeURIComponent(fileName)}`);
+export async function deleteLog(fileName: string): Promise<ApiResponse<void>> {
+  return apiClient.get<void>(`/logs/delete?fileName=${encodeURIComponent(fileName)}`);
 }
 
-export async function deleteAllLogs(): Promise<ApiResponse<{}>> {
-  return apiClient.get<{}>('/logs/deleteAll');
+export async function deleteAllLogs(): Promise<ApiResponse<void>> {
+  return apiClient.get<void>('/logs/deleteAll');
 }

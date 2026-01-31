@@ -55,6 +55,6 @@ export async function setGroupDetails(params: {
   return apiClient.get('/admin/groups/set', apiParams);
 }
 
-export async function deleteGroup(group: string): Promise<ApiResponse<{}>> {
+export async function deleteGroup(group: string): Promise<ApiResponse<void>> {
   return apiClient.get('/admin/groups/delete', { group });
 }
