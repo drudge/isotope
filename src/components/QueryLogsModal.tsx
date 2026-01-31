@@ -118,7 +118,7 @@ export default function QueryLogsModal({
     setResponseType(newResponseType);
     setRcode("");
     setQtype("");
-    setShowFilters(!!newResponseType);
+    setShowFilters(false);
     setPageNumber(1);
     setSearchTerm("");
 
