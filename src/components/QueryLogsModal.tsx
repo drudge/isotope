@@ -36,6 +36,7 @@ interface QueryLogsModalProps {
     clientIpAddress?: string;
     qname?: string;
     responseType?: string;
+    rcode?: string;
   };
 }
 
@@ -124,12 +125,13 @@ export default function QueryLogsModal({
     const newClientIp = initialFilter?.clientIpAddress || "";
     const newQname = initialFilter?.qname || "";
     const newResponseType = initialFilter?.responseType || "";
+    const newRcode = initialFilter?.rcode || "";
 
     setClientIpAddress(newClientIp);
     setQname(newQname);
     setProtocol("");
     setResponseType(newResponseType);
-    setRcode("");
+    setRcode(newRcode);
     setQtype("");
     setShowFilters(false);
     setPageNumber(1);
@@ -146,8 +148,9 @@ export default function QueryLogsModal({
       clientIpAddress: newClientIp,
       qname: newQname,
       responseType: newResponseType,
+      rcode: newRcode,
     });
-  }, [open, loadingLoggers, selectedLogger, initialFilter?.clientIpAddress, initialFilter?.qname, initialFilter?.responseType]);
+  }, [open, loadingLoggers, selectedLogger, initialFilter?.clientIpAddress, initialFilter?.qname, initialFilter?.responseType, initialFilter?.rcode]);
 
   // Fetch logs when filters or pagination changes (but not on initial open)
   useEffect(() => {
@@ -163,7 +166,8 @@ export default function QueryLogsModal({
       open &&
       clientIpAddress === (initialFilter?.clientIpAddress || "") &&
       qname === (initialFilter?.qname || "") &&
-      responseType === (initialFilter?.responseType || "")
+      responseType === (initialFilter?.responseType || "") &&
+      rcode === (initialFilter?.rcode || "")
     ) {
       // Skip if this is the initial load (already handled above)
       return;

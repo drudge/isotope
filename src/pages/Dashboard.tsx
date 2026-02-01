@@ -27,6 +27,7 @@ import { useApi } from "@/hooks/useApi";
 import { getStats } from "@/api/dns";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import QueryLogsModal from "@/components/QueryLogsModal";
 
 // Stat box component matching Technitium's colored boxes
 interface StatBoxProps {
@@ -35,16 +36,18 @@ interface StatBoxProps {
   subValue?: string;
   color: string;
   isLoading?: boolean;
+  onClick?: () => void;
 }
 
-function StatBox({ label, value, subValue, color, isLoading }: StatBoxProps) {
-  return (
-    <div
-      className={cn(
-        "rounded-lg px-4 py-3 text-white min-w-[120px] flex flex-col",
-        color,
-      )}
-    >
+function StatBox({ label, value, subValue, color, isLoading, onClick }: StatBoxProps) {
+  const baseClasses = cn(
+    "rounded-lg px-4 py-3 text-white min-w-[120px] flex flex-col text-left",
+    color,
+    onClick && "cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-white/30"
+  );
+
+  const content = (
+    <>
       {isLoading ? (
         <>
           <Skeleton className="h-7 w-16 bg-white/20" />
@@ -61,8 +64,18 @@ function StatBox({ label, value, subValue, color, isLoading }: StatBoxProps) {
         </>
       )}
       <div className="text-xs font-medium mt-1.5 opacity-90">{label}</div>
-    </div>
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button onClick={onClick} className={baseClasses}>
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={baseClasses}>{content}</div>;
 }
 
 interface ChartDataset {
@@ -215,6 +228,16 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState<TimeRange>("LastHour");
   const [expandedLists, setExpandedLists] = useState(false);
+  const [showLogsModal, setShowLogsModal] = useState(false);
+  const [logsModalFilter, setLogsModalFilter] = useState<{
+    responseType?: string;
+    rcode?: string;
+  }>({});
+
+  const openLogsModal = (filter: { responseType?: string; rcode?: string }) => {
+    setLogsModalFilter(filter);
+    setShowLogsModal(true);
+  };
 
   const { data: statsData, isLoading: statsLoading } = useApi<StatsResponse>(
     () =>
@@ -275,6 +298,7 @@ export default function Dashboard() {
           subValue="100%"
           color="bg-blue-500"
           isLoading={statsLoading}
+          onClick={() => openLogsModal({})}
         />
         <StatBox
           label="No Error"
@@ -286,6 +310,7 @@ export default function Dashboard() {
           }
           color="bg-green-500"
           isLoading={statsLoading}
+          onClick={() => openLogsModal({ rcode: "NoError" })}
         />
         <StatBox
           label="Server Failure"
@@ -300,6 +325,7 @@ export default function Dashboard() {
           }
           color="bg-red-400"
           isLoading={statsLoading}
+          onClick={() => openLogsModal({ rcode: "ServerFailure" })}
         />
         <StatBox
           label="NX Domain"
@@ -311,6 +337,7 @@ export default function Dashboard() {
           }
           color="bg-gray-500"
           isLoading={statsLoading}
+          onClick={() => openLogsModal({ rcode: "NxDomain" })}
         />
         <StatBox
           label="Refused"
@@ -322,6 +349,7 @@ export default function Dashboard() {
           }
           color="bg-teal-500"
           isLoading={statsLoading}
+          onClick={() => openLogsModal({ rcode: "Refused" })}
         />
         <StatBox
           label="Authoritative"
@@ -336,6 +364,7 @@ export default function Dashboard() {
           }
           color="bg-blue-400"
           isLoading={statsLoading}
+          onClick={() => openLogsModal({ responseType: "Authoritative" })}
         />
         <StatBox
           label="Recursive"
@@ -347,6 +376,7 @@ export default function Dashboard() {
           }
           color="bg-green-400"
           isLoading={statsLoading}
+          onClick={() => openLogsModal({ responseType: "Recursive" })}
         />
         <StatBox
           label="Cached"
@@ -358,6 +388,7 @@ export default function Dashboard() {
           }
           color="bg-yellow-500"
           isLoading={statsLoading}
+          onClick={() => openLogsModal({ responseType: "Cached" })}
         />
         <StatBox
           label="Blocked"
@@ -369,6 +400,7 @@ export default function Dashboard() {
           }
           color="bg-orange-500"
           isLoading={statsLoading}
+          onClick={() => openLogsModal({ responseType: "Blocked" })}
         />
         <StatBox
           label="Dropped"
@@ -1023,6 +1055,12 @@ export default function Dashboard() {
           </Card>
         )}
       </div>
+
+      <QueryLogsModal
+        open={showLogsModal}
+        onClose={() => setShowLogsModal(false)}
+        initialFilter={logsModalFilter}
+      />
     </div>
   );
 }
