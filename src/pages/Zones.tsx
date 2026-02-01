@@ -12,6 +12,7 @@ import {
   Settings2,
   X,
   MoreVertical,
+  Power,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1041,6 +1042,7 @@ function ZoneRecordsView({
   zone,
   onBack,
   onDelete,
+  onToggle,
   initialRecordName,
   initialRecordType,
   initialRecordValue,
@@ -1048,6 +1050,7 @@ function ZoneRecordsView({
   zone: Zone;
   onBack: () => void;
   onDelete: (zone: Zone) => void;
+  onToggle: (zone: Zone) => void;
   initialRecordName?: string;
   initialRecordType?: string;
   initialRecordValue?: string;
@@ -1652,6 +1655,10 @@ function ZoneRecordsView({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onToggle(zone)}>
+                <Power className="h-4 w-4 mr-2" />
+                {zone.disabled ? "Enable Zone" : "Disable Zone"}
+              </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
                 onClick={() => onDelete(zone)}
@@ -2000,8 +2007,7 @@ export default function Zones() {
     setZoneToDelete(null);
   };
 
-  // Toggle function available for future use (e.g., context menu)
-  const _handleToggle = async (zone: Zone) => {
+  const handleToggle = async (zone: Zone) => {
     const action = zone.disabled ? enableZone : disableZone;
     const response = await action(zone.name);
 
@@ -2014,7 +2020,6 @@ export default function Zones() {
       toast.error(response.errorMessage || "Failed to update zone");
     }
   };
-  void _handleToggle;
 
   // Show zone detail view if a zone is selected
   if (selectedZone) {
@@ -2024,6 +2029,7 @@ export default function Zones() {
           zone={selectedZone}
           onBack={() => navigate("/zones")}
           onDelete={(z) => setZoneToDelete(z)}
+          onToggle={(z) => handleToggle(z)}
           initialRecordName={recordName}
           initialRecordType={recordType}
           initialRecordValue={recordValue}
@@ -2231,6 +2237,10 @@ export default function Zones() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuItem onClick={() => handleToggle(zone)}>
+                        <Power className="h-4 w-4 mr-2" />
+                        {zone.disabled ? "Enable Zone" : "Disable Zone"}
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
                         onClick={() => setZoneToDelete(zone)}
