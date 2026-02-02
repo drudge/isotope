@@ -27,7 +27,6 @@ export default function Administration() {
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="groups">Groups</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
-          <TabsTrigger value="cluster">Cluster</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sessions" className="flex-1 mt-4">
@@ -44,10 +43,6 @@ export default function Administration() {
 
         <TabsContent value="permissions" className="flex-1 mt-4">
           <Permissions />
-        </TabsContent>
-
-        <TabsContent value="cluster" className="flex-1 mt-4">
-          <div className="text-muted-foreground">Cluster management - Coming soon</div>
         </TabsContent>
       </Tabs>
     </div>
