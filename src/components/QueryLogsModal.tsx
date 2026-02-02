@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import {
   X,
   Search,
@@ -75,6 +75,104 @@ export default function QueryLogsModal({
   // Flag to skip the next filter effect run (prevents race condition)
   const skipNextFilterEffect = useRef(false);
 
+  // Define fetchLogsWithParams callback
+  const fetchLogsWithParams = useCallback(
+    async (params: {
+      pageNumber: number;
+      entriesPerPage: number;
+      clientIpAddress?: string;
+      qname?: string;
+      protocol?: string;
+      responseType?: string;
+      rcode?: string;
+      qtype?: string;
+    }) => {
+      if (!selectedLogger) {
+        setError("No query logger selected");
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+      try {
+        // Parse selected logger: "AppName::ClassPath"
+        const [appName, classPath] = selectedLogger.split("::");
+
+        const response = await queryLogs({
+          name: appName,
+          classPath: classPath,
+          pageNumber: params.pageNumber,
+          entriesPerPage: params.entriesPerPage,
+          descendingOrder: true,
+          clientIpAddress: params.clientIpAddress || undefined,
+          protocol:
+            params.protocol && params.protocol !== "all"
+              ? params.protocol
+              : undefined,
+          responseType:
+            params.responseType && params.responseType !== "all"
+              ? params.responseType
+              : undefined,
+          rcode: params.rcode || undefined,
+          qname: params.qname || undefined,
+          qtype: params.qtype || undefined,
+        });
+
+        if (response.status === "ok" && response.response) {
+          setLogs(response.response.entries || []);
+          setTotalPages(response.response.totalPages || 0);
+          setTotalEntries(response.response.totalEntries || 0);
+        } else {
+          throw new Error(response.errorMessage || "Failed to load logs");
+        }
+      } catch (err) {
+        console.error("Failed to fetch query logs:", err);
+        const errorMsg = err instanceof Error ? err.message : "Unknown error";
+        if (errorMsg.includes("not found")) {
+          setError(
+            "The selected query logger app was not found or has been uninstalled. Please select a different query logger.",
+          );
+        } else if (errorMsg.includes("404")) {
+          setError(
+            "Query logging may not be enabled on this DNS server. Please check your server settings.",
+          );
+        } else {
+          setError(`Failed to load query logs: ${errorMsg}`);
+        }
+        setLogs([]);
+        setTotalPages(0);
+        setTotalEntries(0);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedLogger],
+  );
+
+  // Define fetchLogs callback
+  const fetchLogs = useCallback(async () => {
+    await fetchLogsWithParams({
+      pageNumber,
+      entriesPerPage,
+      clientIpAddress,
+      qname,
+      protocol,
+      responseType,
+      rcode,
+      qtype,
+    });
+  }, [
+    fetchLogsWithParams,
+    pageNumber,
+    entriesPerPage,
+    clientIpAddress,
+    qname,
+    protocol,
+    responseType,
+    rcode,
+    qtype,
+  ]);
+
   // Reset initialization tracking when modal closes
   useEffect(() => {
     if (!open) {
@@ -116,7 +214,7 @@ export default function QueryLogsModal({
     };
 
     fetchQueryLoggers();
-  }, [open]);
+  }, [open, selectedLogger]);
 
   // Apply initial filters and fetch when modal opens or initialFilter changes
   useEffect(() => {
@@ -150,11 +248,21 @@ export default function QueryLogsModal({
       responseType: newResponseType,
       rcode: newRcode,
     });
-  }, [open, loadingLoggers, selectedLogger, initialFilter?.clientIpAddress, initialFilter?.qname, initialFilter?.responseType, initialFilter?.rcode]);
+  }, [
+    open,
+    loadingLoggers,
+    selectedLogger,
+    entriesPerPage,
+    fetchLogsWithParams,
+    initialFilter?.clientIpAddress,
+    initialFilter?.qname,
+    initialFilter?.responseType,
+    initialFilter?.rcode,
+  ]);
 
   // Fetch logs when filters or pagination changes (but not on initial open)
   useEffect(() => {
-    if (!selectedLogger || loadingLoggers) return;
+    if (!selectedLogger || loadingLoggers || !open) return;
     // Skip if initial filter hasn't been applied yet (prevents race condition)
     if (!initialFilterApplied.current) return;
     // Skip this run if initial filter effect just executed (both effects triggered by same state change)
@@ -163,7 +271,6 @@ export default function QueryLogsModal({
       return;
     }
     if (
-      open &&
       clientIpAddress === (initialFilter?.clientIpAddress || "") &&
       qname === (initialFilter?.qname || "") &&
       responseType === (initialFilter?.responseType || "") &&
@@ -172,103 +279,23 @@ export default function QueryLogsModal({
       // Skip if this is the initial load (already handled above)
       return;
     }
-    if (open) {
-      fetchLogs();
-    }
+    fetchLogs();
   }, [
-    pageNumber,
-    entriesPerPage,
+    fetchLogs,
+    loadingLoggers,
+    open,
+    selectedLogger,
     clientIpAddress,
     qname,
     protocol,
     responseType,
     rcode,
     qtype,
-    selectedLogger,
+    initialFilter?.clientIpAddress,
+    initialFilter?.qname,
+    initialFilter?.responseType,
+    initialFilter?.rcode,
   ]);
-
-  const fetchLogsWithParams = async (params: {
-    pageNumber: number;
-    entriesPerPage: number;
-    clientIpAddress?: string;
-    qname?: string;
-    protocol?: string;
-    responseType?: string;
-    rcode?: string;
-    qtype?: string;
-  }) => {
-    if (!selectedLogger) {
-      setError("No query logger selected");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      // Parse selected logger: "AppName::ClassPath"
-      const [appName, classPath] = selectedLogger.split("::");
-
-      const response = await queryLogs({
-        name: appName,
-        classPath: classPath,
-        pageNumber: params.pageNumber,
-        entriesPerPage: params.entriesPerPage,
-        descendingOrder: true,
-        clientIpAddress: params.clientIpAddress || undefined,
-        protocol:
-          params.protocol && params.protocol !== "all"
-            ? params.protocol
-            : undefined,
-        responseType:
-          params.responseType && params.responseType !== "all"
-            ? params.responseType
-            : undefined,
-        rcode: params.rcode || undefined,
-        qname: params.qname || undefined,
-        qtype: params.qtype || undefined,
-      });
-
-      if (response.status === "ok" && response.response) {
-        setLogs(response.response.entries || []);
-        setTotalPages(response.response.totalPages || 0);
-        setTotalEntries(response.response.totalEntries || 0);
-      } else {
-        throw new Error(response.errorMessage || "Failed to load logs");
-      }
-    } catch (err) {
-      console.error("Failed to fetch query logs:", err);
-      const errorMsg = err instanceof Error ? err.message : "Unknown error";
-      if (errorMsg.includes("not found")) {
-        setError(
-          "The selected query logger app was not found or has been uninstalled. Please select a different query logger.",
-        );
-      } else if (errorMsg.includes("404")) {
-        setError(
-          "Query logging may not be enabled on this DNS server. Please check your server settings.",
-        );
-      } else {
-        setError(`Failed to load query logs: ${errorMsg}`);
-      }
-      setLogs([]);
-      setTotalPages(0);
-      setTotalEntries(0);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchLogs = async () => {
-    await fetchLogsWithParams({
-      pageNumber,
-      entriesPerPage,
-      clientIpAddress,
-      qname,
-      protocol,
-      responseType,
-      rcode,
-      qtype,
-    });
-  };
 
   const handleSearch = () => {
     setPageNumber(1);

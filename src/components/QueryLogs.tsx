@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
   Search,
@@ -98,23 +98,7 @@ export default function QueryLogs() {
     fetchQueryLoggers();
   }, []);
 
-  // Fetch logs when dependencies change
-  useEffect(() => {
-    if (!selectedLogger || loadingLoggers) return;
-    fetchLogs();
-  }, [
-    pageNumber,
-    entriesPerPage,
-    clientIpAddress,
-    qname,
-    protocol,
-    responseType,
-    rcode,
-    qtype,
-    selectedLogger,
-  ]);
-
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     if (!selectedLogger) {
       setError("No query logger selected");
       return;
@@ -168,7 +152,23 @@ export default function QueryLogs() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    selectedLogger,
+    pageNumber,
+    entriesPerPage,
+    clientIpAddress,
+    protocol,
+    responseType,
+    rcode,
+    qname,
+    qtype,
+  ]);
+
+  // Fetch logs when dependencies change
+  useEffect(() => {
+    if (!selectedLogger || loadingLoggers) return;
+    fetchLogs();
+  }, [fetchLogs, loadingLoggers, selectedLogger]);
 
   const handleSearch = () => {
     setPageNumber(1);

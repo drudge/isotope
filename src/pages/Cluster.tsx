@@ -186,7 +186,10 @@ export default function Cluster() {
   const selfNode = useMemo(() => nodes.find((n) => n.state === 'Self'), [nodes]);
   const isPrimary = selfNode?.type === 'Primary';
   const isSecondary = selfNode?.type === 'Secondary';
-  const serverIpAddresses = clusterState?.serverIpAddresses ?? [];
+  const serverIpAddresses = useMemo(
+    () => clusterState?.serverIpAddresses ?? [],
+    [clusterState?.serverIpAddresses]
+  );
   const connectedCount = useMemo(
     () => nodes.filter((n) => n.state === 'Connected' || n.state === 'Self').length,
     [nodes]

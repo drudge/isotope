@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Download,
   Trash2,
@@ -45,34 +45,7 @@ export default function ServerLogs() {
   const [expandedStacks, setExpandedStacks] = useState<Set<number>>(new Set());
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const fetchLogs = async () => {
-    setLoading(true);
-    try {
-      const response = await listLogs();
-      if (response.status === "ok" && response.response) {
-        const logFiles = response.response.logFiles || [];
-        setLogs(logFiles);
-
-        // Auto-select the first (most recent) log file on desktop
-        if (logFiles.length > 0 && !viewingLog && window.innerWidth >= 1024) {
-          handleView(logFiles[0].fileName);
-        }
-      } else {
-        toast.error("Failed to load server logs");
-      }
-    } catch (error) {
-      console.error("Failed to fetch logs:", error);
-      toast.error("Failed to load server logs");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchLogs();
-  }, []);
-
-  const handleView = async (fileName: string) => {
+  const handleView = useCallback(async (fileName: string) => {
     setViewingLog(fileName);
     setLoadingContent(true);
     setSearchTerm("");
@@ -87,7 +60,34 @@ export default function ServerLogs() {
     } finally {
       setLoadingContent(false);
     }
-  };
+  }, []);
+
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await listLogs();
+      if (response.status === "ok" && response.response) {
+        const logFiles = response.response.logFiles || [];
+        setLogs(logFiles);
+
+        // Auto-select the first (most recent) log file on desktop
+        if (logFiles.length > 0 && window.innerWidth >= 1024) {
+          handleView(logFiles[0].fileName);
+        }
+      } else {
+        toast.error("Failed to load server logs");
+      }
+    } catch (error) {
+      console.error("Failed to fetch logs:", error);
+      toast.error("Failed to load server logs");
+    } finally {
+      setLoading(false);
+    }
+  }, [handleView]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   const handleDownload = async (fileName: string) => {
     try {
