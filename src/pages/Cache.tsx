@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   Database,
@@ -10,6 +11,7 @@ import {
   Search,
   ChevronRight,
   ArrowLeft,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -562,16 +564,23 @@ export default function Cache() {
                     Real-time cache statistics and management
                   </CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => refetch()}
-                  disabled={isLoading}
-                >
-                  <RefreshCw
-                    className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
-                  />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="icon" asChild>
+                    <Link to="/settings?tab=cache">
+                      <Settings className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => refetch()}
+                    disabled={isLoading}
+                  >
+                    <RefreshCw
+                      className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+                    />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-6">

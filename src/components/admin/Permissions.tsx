@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Save, ChevronRight } from "lucide-react";
+import { Loader2, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -394,8 +394,7 @@ export default function Permissions() {
                 </>
               ) : (
                 <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save
+                                    Save
                 </>
               )}
             </Button>

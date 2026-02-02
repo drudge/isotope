@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Save, Key, Plus, Trash2, Copy } from 'lucide-react';
+import { Key, Plus, Trash2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -281,8 +281,7 @@ export default function TsigSettings({
               Cancel
             </Button>
             <Button onClick={handleAddKey} disabled={isSaving}>
-              <Save className="h-4 w-4 mr-2" />
-              {isSaving ? 'Adding...' : 'Add Key'}
+                            {isSaving ? 'Adding...' : 'Add Key'}
             </Button>
           </DialogFooter>
         </DialogContent>
