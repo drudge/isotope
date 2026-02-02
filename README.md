@@ -10,8 +10,15 @@ A clean, fast web interface for [Technitium DNS Server](https://technitium.com/d
 - Real-time dashboard with query statistics and charts
 - Zone management with full DNS record editing
 - Cache browser with domain-level controls
+- Block list and allow list management
+- DHCP scope and lease management
+- DNS Client for query testing
+- DNS Apps management
 - Query log viewer with advanced filtering
 - Server log viewer with syntax highlighting
+- Administration panel (users, groups, sessions, permissions)
+- Comprehensive server settings
+- Cluster management
 - Dark mode support
 
 ## Installation
