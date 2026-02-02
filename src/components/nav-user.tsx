@@ -2,6 +2,7 @@ import {
   ChevronsUpDown,
   LogOut,
   Settings,
+  User,
 } from 'lucide-react';
 import { Link } from 'react-router';
 
@@ -86,6 +87,12 @@ export function NavUser({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
+              <DropdownMenuItem asChild>
+                <Link to="/profile">
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link to="/settings">
                   <Settings className="mr-2 h-4 w-4" />
