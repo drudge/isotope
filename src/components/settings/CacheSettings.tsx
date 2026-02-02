@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Save, Database } from 'lucide-react';
+import { Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -383,8 +383,7 @@ export default function CacheSettings({
       {/* Save Button */}
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={isSaving || !hasChanges}>
-          <Save className="h-4 w-4 mr-2" />
-          {isSaving ? 'Saving...' : 'Save Settings'}
+                    {isSaving ? 'Saving...' : 'Save Settings'}
         </Button>
       </div>
     </div>

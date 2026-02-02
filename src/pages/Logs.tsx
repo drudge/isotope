@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
+import { Settings } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ServerLogs from "@/components/ServerLogs";
 import QueryLogs from "@/components/QueryLogs";
@@ -22,6 +24,11 @@ export default function Logs() {
             View server logs and DNS query history
           </p>
         </div>
+        <Button variant="outline" size="icon" asChild>
+          <Link to="/settings?tab=logging">
+            <Settings className="h-4 w-4" />
+          </Link>
+        </Button>
       </div>
 
       <Tabs
