@@ -16,6 +16,7 @@ import Dhcp from "@/pages/Dhcp";
 import Administration from "@/pages/Administration";
 import Cluster from "@/pages/Cluster";
 import Settings from "@/pages/Settings";
+import Profile from "@/pages/Profile";
 import About from "@/pages/About";
 
 export default function App() {
@@ -49,6 +50,7 @@ export default function App() {
               <Route path="/administration" element={<Administration />} />
               <Route path="/cluster" element={<Cluster />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/profile" element={<Profile />} />
               <Route path="/about" element={<About />} />
             </Route>
           </Routes>

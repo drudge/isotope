@@ -1,186 +1,356 @@
-import { useState } from 'react';
+import { useCallback } from 'react';
+import { useSearchParams, Link } from 'react-router';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import {
+  Server,
+  Globe,
+  Network,
+  Key,
+  RefreshCw,
+  Database,
+  Shield,
+  Waypoints,
+  FileText,
+  Settings2,
+  ExternalLink,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
-import { getServerInfo, flushCache } from '@/api/dns';
-import { changePassword } from '@/api/auth';
+import { getSettings, updateSettings } from '@/api/settings';
 import { toast } from 'sonner';
+import type { DnsSettingsUpdate } from '@/types/settings';
+
+import GeneralSettings from '@/components/settings/GeneralSettings';
+import WebServiceSettings from '@/components/settings/WebServiceSettings';
+import OptionalProtocolsSettings from '@/components/settings/OptionalProtocolsSettings';
+import TsigSettings from '@/components/settings/TsigSettings';
+import RecursionSettings from '@/components/settings/RecursionSettings';
+import CacheSettings from '@/components/settings/CacheSettings';
+import ProxyForwardersSettings from '@/components/settings/ProxyForwardersSettings';
+import LoggingSettings from '@/components/settings/LoggingSettings';
+
+type TabValue =
+  | 'general'
+  | 'web-service'
+  | 'protocols'
+  | 'tsig'
+  | 'recursion'
+  | 'cache'
+  | 'blocking'
+  | 'proxy'
+  | 'logging';
 
 export default function Settings() {
-  useDocumentTitle("Settings");
-  const { user } = useAuth();
-  const { data: serverInfo, isLoading } = useApi(() => getServerInfo(), []);
+  useDocumentTitle('Settings');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = (searchParams.get('tab') as TabValue) || 'general';
 
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [isFlushingCache, setIsFlushingCache] = useState(false);
+  const {
+    data: settings,
+    isLoading,
+    refetch,
+  } = useApi(() => getSettings(), []);
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (newPassword !== confirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      toast.error('Password must be at least 8 characters');
-      return;
-    }
-
-    setIsChangingPassword(true);
-    const response = await changePassword(currentPassword, newPassword);
-
-    if (response.status === 'ok') {
-      toast.success('Password changed successfully');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+  const handleTabChange = (value: string) => {
+    if (value === 'general') {
+      searchParams.delete('tab');
     } else {
-      toast.error(response.errorMessage || 'Failed to change password');
+      searchParams.set('tab', value);
     }
-    setIsChangingPassword(false);
+    setSearchParams(searchParams, { replace: true });
   };
 
-  const handleFlushCache = async () => {
-    setIsFlushingCache(true);
-    const response = await flushCache();
-
-    if (response.status === 'ok') {
-      toast.success('Cache flushed successfully');
-    } else {
-      toast.error(response.errorMessage || 'Failed to flush cache');
-    }
-    setIsFlushingCache(false);
-  };
+  const handleSave = useCallback(
+    async (updates: DnsSettingsUpdate) => {
+      const response = await updateSettings(updates);
+      if (response.status === 'ok') {
+        toast.success('Settings saved successfully');
+        refetch();
+        return true;
+      } else {
+        toast.error(response.errorMessage || 'Failed to save settings');
+        return false;
+      }
+    },
+    [refetch]
+  );
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
+      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage your account and server settings</p>
+        <p className="text-muted-foreground mt-1">
+          Configure DNS server settings and behavior
+        </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Account</CardTitle>
-          <CardDescription>Your account information</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-1">
-            <Label className="text-muted-foreground text-sm">Username</Label>
-            <p className="font-mono">{user?.username}</p>
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Main Content (2/3 width) */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Server Status Card */}
+          <Card className="border-2">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <CardTitle className="text-2xl flex items-center gap-2">
+                    <Settings2 className="h-6 w-6 text-primary" />
+                    Server Configuration
+                  </CardTitle>
+                  <CardDescription>
+                    {isLoading ? (
+                      <Skeleton className="h-4 w-64" />
+                    ) : settings ? (
+                      <>
+                        Technitium DNS Server v{settings.version} •{' '}
+                        {settings.dnsServerDomain}
+                      </>
+                    ) : (
+                      'Configure your DNS server settings'
+                    )}
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => refetch()}
+                  disabled={isLoading}
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
+                  />
+                </Button>
+              </div>
+            </CardHeader>
+          </Card>
+
+          {/* Tabs */}
+          <Tabs value={currentTab} onValueChange={handleTabChange}>
+            <TabsList className="w-full grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 h-auto gap-1">
+              <TabsTrigger value="general" className="gap-1 px-2 py-1.5">
+                <Server className="h-4 w-4" />
+                <span className="hidden xl:inline text-xs">General</span>
+              </TabsTrigger>
+              <TabsTrigger value="web-service" className="gap-1 px-2 py-1.5">
+                <Globe className="h-4 w-4" />
+                <span className="hidden xl:inline text-xs">Web</span>
+              </TabsTrigger>
+              <TabsTrigger value="protocols" className="gap-1 px-2 py-1.5">
+                <Network className="h-4 w-4" />
+                <span className="hidden xl:inline text-xs">Protocols</span>
+              </TabsTrigger>
+              <TabsTrigger value="tsig" className="gap-1 px-2 py-1.5">
+                <Key className="h-4 w-4" />
+                <span className="hidden xl:inline text-xs">TSIG</span>
+              </TabsTrigger>
+              <TabsTrigger value="recursion" className="gap-1 px-2 py-1.5">
+                <RefreshCw className="h-4 w-4" />
+                <span className="hidden xl:inline text-xs">Recursion</span>
+              </TabsTrigger>
+              <TabsTrigger value="cache" className="gap-1 px-2 py-1.5">
+                <Database className="h-4 w-4" />
+                <span className="hidden xl:inline text-xs">Cache</span>
+              </TabsTrigger>
+              <TabsTrigger value="blocking" className="gap-1 px-2 py-1.5">
+                <Shield className="h-4 w-4" />
+                <span className="hidden xl:inline text-xs">Blocking</span>
+              </TabsTrigger>
+              <TabsTrigger value="proxy" className="gap-1 px-2 py-1.5">
+                <Waypoints className="h-4 w-4" />
+                <span className="hidden xl:inline text-xs">Proxy</span>
+              </TabsTrigger>
+              <TabsTrigger value="logging" className="gap-1 px-2 py-1.5">
+                <FileText className="h-4 w-4" />
+                <span className="hidden xl:inline text-xs">Logging</span>
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="general" className="mt-6">
+              <GeneralSettings
+                settings={settings ?? undefined}
+                isLoading={isLoading}
+                onSave={handleSave}
+              />
+            </TabsContent>
+
+            <TabsContent value="web-service" className="mt-6">
+              <WebServiceSettings
+                settings={settings ?? undefined}
+                isLoading={isLoading}
+                onSave={handleSave}
+              />
+            </TabsContent>
+
+            <TabsContent value="protocols" className="mt-6">
+              <OptionalProtocolsSettings
+                settings={settings ?? undefined}
+                isLoading={isLoading}
+                onSave={handleSave}
+              />
+            </TabsContent>
+
+            <TabsContent value="tsig" className="mt-6">
+              <TsigSettings
+                settings={settings ?? undefined}
+                isLoading={isLoading}
+                onSave={handleSave}
+              />
+            </TabsContent>
+
+            <TabsContent value="recursion" className="mt-6">
+              <RecursionSettings
+                settings={settings ?? undefined}
+                isLoading={isLoading}
+                onSave={handleSave}
+              />
+            </TabsContent>
+
+            <TabsContent value="cache" className="mt-6">
+              <CacheSettings
+                settings={settings ?? undefined}
+                isLoading={isLoading}
+                onSave={handleSave}
+              />
+            </TabsContent>
+
+            <TabsContent value="blocking" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5" />
+                    DNS Blocking
+                  </CardTitle>
+                  <CardDescription>
+                    Configure blocking settings, block lists, and allowed/blocked domains
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    DNS blocking settings are managed on a dedicated page with full control over
+                    block lists, blocked domains, allowed domains, and blocking behavior.
+                  </p>
+                  <Button asChild>
+                    <Link to="/blocked">
+                      <Shield className="h-4 w-4 mr-2" />
+                      Manage DNS Blocking
+                      <ExternalLink className="h-4 w-4 ml-2" />
+                    </Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="proxy" className="mt-6">
+              <ProxyForwardersSettings
+                settings={settings ?? undefined}
+                isLoading={isLoading}
+                onSave={handleSave}
+              />
+            </TabsContent>
+
+            <TabsContent value="logging" className="mt-6">
+              <LoggingSettings
+                settings={settings ?? undefined}
+                isLoading={isLoading}
+                onSave={handleSave}
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* Right Column - Guidance (1/3 width) */}
+        <div className="space-y-6">
+          {/* Current Tab Help */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">
+                {currentTab === 'general' && 'General Settings'}
+                {currentTab === 'web-service' && 'Web Service'}
+                {currentTab === 'protocols' && 'Optional Protocols'}
+                {currentTab === 'tsig' && 'TSIG Keys'}
+                {currentTab === 'recursion' && 'Recursion'}
+                {currentTab === 'cache' && 'Cache Settings'}
+                {currentTab === 'blocking' && 'DNS Blocking'}
+                {currentTab === 'proxy' && 'Proxy & Forwarders'}
+                {currentTab === 'logging' && 'Logging'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              {currentTab === 'general' && (
+                <>
+                  <p>Configure the DNS server's identity, listening endpoints, and default record settings.</p>
+                  <p>The server domain is used in SOA records and server identification.</p>
+                </>
+              )}
+              {currentTab === 'web-service' && (
+                <>
+                  <p>Configure the web interface and API service settings including HTTP/HTTPS ports and TLS certificates.</p>
+                  <p>Enable TLS for secure remote access.</p>
+                </>
+              )}
+              {currentTab === 'protocols' && (
+                <>
+                  <p>Enable secure DNS protocols like DNS-over-TLS (DoT), DNS-over-HTTPS (DoH), and DNS-over-QUIC (DoQ).</p>
+                  <p>These provide encrypted DNS queries for enhanced privacy.</p>
+                </>
+              )}
+              {currentTab === 'tsig' && (
+                <>
+                  <p>TSIG (Transaction Signature) keys are used to authenticate DNS zone transfers and dynamic updates.</p>
+                  <p>Add keys for secure communication with secondary DNS servers.</p>
+                </>
+              )}
+              {currentTab === 'recursion' && (
+                <>
+                  <p>Control how the DNS server resolves queries for domains it doesn't host.</p>
+                  <p>Enable DNSSEC validation to protect against DNS spoofing.</p>
+                </>
+              )}
+              {currentTab === 'cache' && (
+                <>
+                  <p>Configure DNS cache behavior including TTL limits, stale serving, and prefetching.</p>
+                  <p>Proper cache settings improve performance and reduce upstream queries.</p>
+                </>
+              )}
+              {currentTab === 'blocking' && (
+                <>
+                  <p>DNS blocking prevents access to unwanted domains like ads, trackers, and malware.</p>
+                  <p>Full blocking configuration is available on the dedicated Blocked page.</p>
+                </>
+              )}
+              {currentTab === 'proxy' && (
+                <>
+                  <p>Configure upstream proxy servers and DNS forwarders.</p>
+                  <p>Forwarders send queries to specified DNS servers instead of resolving recursively.</p>
+                </>
+              )}
+              {currentTab === 'logging' && (
+                <>
+                  <p>Configure server logging and query logging behavior.</p>
+                  <p>Query logging can help with troubleshooting but may impact performance.</p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Warning Notice */}
+          <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+            <p className="text-sm text-amber-900 dark:text-amber-100">
+              <strong>Note:</strong> Some settings may require the DNS server to restart to take effect. Changes are saved immediately when you click Save.
+            </p>
           </div>
-          <div className="grid gap-1">
-            <Label className="text-muted-foreground text-sm">Display Name</Label>
-            <p>{user?.displayName}</p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Change Password</CardTitle>
-          <CardDescription>Update your account password</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleChangePassword} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="currentPassword">Current Password</Label>
-              <Input
-                id="currentPassword"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                autoComplete="new-password"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm New Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                autoComplete="new-password"
-                required
-              />
-            </div>
-            <Button type="submit" disabled={isChangingPassword}>
-              {isChangingPassword ? 'Changing...' : 'Change Password'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Separator />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Server Information</CardTitle>
-          <CardDescription>Technitium DNS Server details</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-4 w-48" />
-              <Skeleton className="h-4 w-64" />
-              <Skeleton className="h-4 w-32" />
-            </div>
-          ) : serverInfo ? (
-            <>
-              <div className="grid gap-1">
-                <Label className="text-muted-foreground text-sm">Version</Label>
-                <p>{serverInfo.version}</p>
-              </div>
-              <div className="grid gap-1">
-                <Label className="text-muted-foreground text-sm">Server Domain</Label>
-                <p className="font-mono">{serverInfo.dnsServerDomain}</p>
-              </div>
-              <div className="grid gap-1">
-                <Label className="text-muted-foreground text-sm">Uptime</Label>
-                <p>{serverInfo.uptime}</p>
-              </div>
-            </>
-          ) : null}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Cache Management</CardTitle>
-          <CardDescription>Manage DNS cache</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            onClick={handleFlushCache}
-            disabled={isFlushingCache}
-          >
-            {isFlushingCache ? 'Flushing...' : 'Flush Cache'}
-          </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
