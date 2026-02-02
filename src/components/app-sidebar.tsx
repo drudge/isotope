@@ -11,6 +11,7 @@ import {
   AppWindow,
   Network,
   Users,
+  Waypoints,
   Info,
   type LucideIcon,
 } from "lucide-react";
@@ -55,6 +56,7 @@ const systemNavItems: NavItem[] = [
   { title: "Settings", url: "/settings", icon: Settings },
   { title: "DHCP", url: "/dhcp", icon: Server },
   { title: "Administration", url: "/administration", icon: Users },
+  { title: "Cluster", url: "/cluster", icon: Waypoints },
   { title: "About", url: "/about", icon: Info },
 ];
 
