@@ -90,267 +90,178 @@ export default function Settings() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground mt-1">
-          Configure DNS server settings and behavior
+          Configure DNS server settings and behavior. Some settings may require the DNS server to restart to take effect.
         </p>
       </div>
 
-      {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Main Content (2/3 width) */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Server Status Card */}
-          <Card className="border-2">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <CardTitle className="text-2xl flex items-center gap-2">
-                    <Settings2 className="h-6 w-6 text-primary" />
-                    Server Configuration
-                  </CardTitle>
-                  <CardDescription>
-                    {isLoading ? (
-                      <Skeleton className="h-4 w-64" />
-                    ) : settings ? (
-                      <>
-                        Technitium DNS Server v{settings.version} •{' '}
-                        {settings.dnsServerDomain}
-                      </>
-                    ) : (
-                      'Configure your DNS server settings'
-                    )}
-                  </CardDescription>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => refetch()}
-                  disabled={isLoading}
-                >
-                  <RefreshCw
-                    className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
-                  />
-                </Button>
-              </div>
-            </CardHeader>
-          </Card>
-
-          {/* Tabs */}
-          <Tabs value={currentTab} onValueChange={handleTabChange}>
-            <TabsList className="w-full grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 h-auto gap-1">
-              <TabsTrigger value="general" className="gap-1 px-2 py-1.5">
-                <Server className="h-4 w-4" />
-                <span className="hidden xl:inline text-xs">General</span>
-              </TabsTrigger>
-              <TabsTrigger value="web-service" className="gap-1 px-2 py-1.5">
-                <Globe className="h-4 w-4" />
-                <span className="hidden xl:inline text-xs">Web</span>
-              </TabsTrigger>
-              <TabsTrigger value="protocols" className="gap-1 px-2 py-1.5">
-                <Network className="h-4 w-4" />
-                <span className="hidden xl:inline text-xs">Protocols</span>
-              </TabsTrigger>
-              <TabsTrigger value="tsig" className="gap-1 px-2 py-1.5">
-                <Key className="h-4 w-4" />
-                <span className="hidden xl:inline text-xs">TSIG</span>
-              </TabsTrigger>
-              <TabsTrigger value="recursion" className="gap-1 px-2 py-1.5">
-                <RefreshCw className="h-4 w-4" />
-                <span className="hidden xl:inline text-xs">Recursion</span>
-              </TabsTrigger>
-              <TabsTrigger value="cache" className="gap-1 px-2 py-1.5">
-                <Database className="h-4 w-4" />
-                <span className="hidden xl:inline text-xs">Cache</span>
-              </TabsTrigger>
-              <TabsTrigger value="blocking" className="gap-1 px-2 py-1.5">
-                <Shield className="h-4 w-4" />
-                <span className="hidden xl:inline text-xs">Blocking</span>
-              </TabsTrigger>
-              <TabsTrigger value="proxy" className="gap-1 px-2 py-1.5">
-                <Waypoints className="h-4 w-4" />
-                <span className="hidden xl:inline text-xs">Proxy</span>
-              </TabsTrigger>
-              <TabsTrigger value="logging" className="gap-1 px-2 py-1.5">
-                <FileText className="h-4 w-4" />
-                <span className="hidden xl:inline text-xs">Logging</span>
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="general" className="mt-6">
-              <GeneralSettings
-                settings={settings ?? undefined}
-                isLoading={isLoading}
-                onSave={handleSave}
+      {/* Server Status Card */}
+      <Card className="border-2">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <CardTitle className="text-2xl flex items-center gap-2">
+                <Settings2 className="h-6 w-6 text-primary" />
+                Server Configuration
+              </CardTitle>
+              <CardDescription>
+                {isLoading ? (
+                  <Skeleton className="h-4 w-64" />
+                ) : settings ? (
+                  <>
+                    Technitium DNS Server v{settings.version} •{' '}
+                    {settings.dnsServerDomain}
+                  </>
+                ) : (
+                  'Configure your DNS server settings'
+                )}
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => refetch()}
+              disabled={isLoading}
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`}
               />
-            </TabsContent>
+            </Button>
+          </div>
+        </CardHeader>
+      </Card>
 
-            <TabsContent value="web-service" className="mt-6">
-              <WebServiceSettings
-                settings={settings ?? undefined}
-                isLoading={isLoading}
-                onSave={handleSave}
-              />
-            </TabsContent>
+      {/* Tabs */}
+      <Tabs value={currentTab} onValueChange={handleTabChange}>
+        <TabsList className="w-full grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 h-auto gap-1">
+          <TabsTrigger value="general" className="gap-1 px-2 py-1.5">
+            <Server className="h-4 w-4" />
+            <span className="hidden xl:inline text-xs">General</span>
+          </TabsTrigger>
+          <TabsTrigger value="web-service" className="gap-1 px-2 py-1.5">
+            <Globe className="h-4 w-4" />
+            <span className="hidden xl:inline text-xs">Web</span>
+          </TabsTrigger>
+          <TabsTrigger value="protocols" className="gap-1 px-2 py-1.5">
+            <Network className="h-4 w-4" />
+            <span className="hidden xl:inline text-xs">Protocols</span>
+          </TabsTrigger>
+          <TabsTrigger value="tsig" className="gap-1 px-2 py-1.5">
+            <Key className="h-4 w-4" />
+            <span className="hidden xl:inline text-xs">TSIG</span>
+          </TabsTrigger>
+          <TabsTrigger value="recursion" className="gap-1 px-2 py-1.5">
+            <RefreshCw className="h-4 w-4" />
+            <span className="hidden xl:inline text-xs">Recursion</span>
+          </TabsTrigger>
+          <TabsTrigger value="cache" className="gap-1 px-2 py-1.5">
+            <Database className="h-4 w-4" />
+            <span className="hidden xl:inline text-xs">Cache</span>
+          </TabsTrigger>
+          <TabsTrigger value="blocking" className="gap-1 px-2 py-1.5">
+            <Shield className="h-4 w-4" />
+            <span className="hidden xl:inline text-xs">Blocking</span>
+          </TabsTrigger>
+          <TabsTrigger value="proxy" className="gap-1 px-2 py-1.5">
+            <Waypoints className="h-4 w-4" />
+            <span className="hidden xl:inline text-xs">Proxy</span>
+          </TabsTrigger>
+          <TabsTrigger value="logging" className="gap-1 px-2 py-1.5">
+            <FileText className="h-4 w-4" />
+            <span className="hidden xl:inline text-xs">Logging</span>
+          </TabsTrigger>
+        </TabsList>
 
-            <TabsContent value="protocols" className="mt-6">
-              <OptionalProtocolsSettings
-                settings={settings ?? undefined}
-                isLoading={isLoading}
-                onSave={handleSave}
-              />
-            </TabsContent>
+        <TabsContent value="general" className="mt-6">
+          <GeneralSettings
+            settings={settings ?? undefined}
+            isLoading={isLoading}
+            onSave={handleSave}
+          />
+        </TabsContent>
 
-            <TabsContent value="tsig" className="mt-6">
-              <TsigSettings
-                settings={settings ?? undefined}
-                isLoading={isLoading}
-                onSave={handleSave}
-              />
-            </TabsContent>
+        <TabsContent value="web-service" className="mt-6">
+          <WebServiceSettings
+            settings={settings ?? undefined}
+            isLoading={isLoading}
+            onSave={handleSave}
+          />
+        </TabsContent>
 
-            <TabsContent value="recursion" className="mt-6">
-              <RecursionSettings
-                settings={settings ?? undefined}
-                isLoading={isLoading}
-                onSave={handleSave}
-              />
-            </TabsContent>
+        <TabsContent value="protocols" className="mt-6">
+          <OptionalProtocolsSettings
+            settings={settings ?? undefined}
+            isLoading={isLoading}
+            onSave={handleSave}
+          />
+        </TabsContent>
 
-            <TabsContent value="cache" className="mt-6">
-              <CacheSettings
-                settings={settings ?? undefined}
-                isLoading={isLoading}
-                onSave={handleSave}
-              />
-            </TabsContent>
+        <TabsContent value="tsig" className="mt-6">
+          <TsigSettings
+            settings={settings ?? undefined}
+            isLoading={isLoading}
+            onSave={handleSave}
+          />
+        </TabsContent>
 
-            <TabsContent value="blocking" className="mt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5" />
-                    DNS Blocking
-                  </CardTitle>
-                  <CardDescription>
-                    Configure blocking settings, block lists, and allowed/blocked domains
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    DNS blocking settings are managed on a dedicated page with full control over
-                    block lists, blocked domains, allowed domains, and blocking behavior.
-                  </p>
-                  <Button asChild>
-                    <Link to="/blocked">
-                      <Shield className="h-4 w-4 mr-2" />
-                      Manage DNS Blocking
-                      <ExternalLink className="h-4 w-4 ml-2" />
-                    </Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            </TabsContent>
+        <TabsContent value="recursion" className="mt-6">
+          <RecursionSettings
+            settings={settings ?? undefined}
+            isLoading={isLoading}
+            onSave={handleSave}
+          />
+        </TabsContent>
 
-            <TabsContent value="proxy" className="mt-6">
-              <ProxyForwardersSettings
-                settings={settings ?? undefined}
-                isLoading={isLoading}
-                onSave={handleSave}
-              />
-            </TabsContent>
+        <TabsContent value="cache" className="mt-6">
+          <CacheSettings
+            settings={settings ?? undefined}
+            isLoading={isLoading}
+            onSave={handleSave}
+          />
+        </TabsContent>
 
-            <TabsContent value="logging" className="mt-6">
-              <LoggingSettings
-                settings={settings ?? undefined}
-                isLoading={isLoading}
-                onSave={handleSave}
-              />
-            </TabsContent>
-          </Tabs>
-        </div>
-
-        {/* Right Column - Guidance (1/3 width) */}
-        <div className="space-y-6">
-          {/* Current Tab Help */}
+        <TabsContent value="blocking" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">
-                {currentTab === 'general' && 'General Settings'}
-                {currentTab === 'web-service' && 'Web Service'}
-                {currentTab === 'protocols' && 'Optional Protocols'}
-                {currentTab === 'tsig' && 'TSIG Keys'}
-                {currentTab === 'recursion' && 'Recursion'}
-                {currentTab === 'cache' && 'Cache Settings'}
-                {currentTab === 'blocking' && 'DNS Blocking'}
-                {currentTab === 'proxy' && 'Proxy & Forwarders'}
-                {currentTab === 'logging' && 'Logging'}
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                DNS Blocking
               </CardTitle>
+              <CardDescription>
+                Configure blocking settings, block lists, and allowed/blocked domains
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-              {currentTab === 'general' && (
-                <>
-                  <p>Configure the DNS server's identity, listening endpoints, and default record settings.</p>
-                  <p>The server domain is used in SOA records and server identification.</p>
-                </>
-              )}
-              {currentTab === 'web-service' && (
-                <>
-                  <p>Configure the web interface and API service settings including HTTP/HTTPS ports and TLS certificates.</p>
-                  <p>Enable TLS for secure remote access.</p>
-                </>
-              )}
-              {currentTab === 'protocols' && (
-                <>
-                  <p>Enable secure DNS protocols like DNS-over-TLS (DoT), DNS-over-HTTPS (DoH), and DNS-over-QUIC (DoQ).</p>
-                  <p>These provide encrypted DNS queries for enhanced privacy.</p>
-                </>
-              )}
-              {currentTab === 'tsig' && (
-                <>
-                  <p>TSIG (Transaction Signature) keys are used to authenticate DNS zone transfers and dynamic updates.</p>
-                  <p>Add keys for secure communication with secondary DNS servers.</p>
-                </>
-              )}
-              {currentTab === 'recursion' && (
-                <>
-                  <p>Control how the DNS server resolves queries for domains it doesn't host.</p>
-                  <p>Enable DNSSEC validation to protect against DNS spoofing.</p>
-                </>
-              )}
-              {currentTab === 'cache' && (
-                <>
-                  <p>Configure DNS cache behavior including TTL limits, stale serving, and prefetching.</p>
-                  <p>Proper cache settings improve performance and reduce upstream queries.</p>
-                </>
-              )}
-              {currentTab === 'blocking' && (
-                <>
-                  <p>DNS blocking prevents access to unwanted domains like ads, trackers, and malware.</p>
-                  <p>Full blocking configuration is available on the dedicated Blocked page.</p>
-                </>
-              )}
-              {currentTab === 'proxy' && (
-                <>
-                  <p>Configure upstream proxy servers and DNS forwarders.</p>
-                  <p>Forwarders send queries to specified DNS servers instead of resolving recursively.</p>
-                </>
-              )}
-              {currentTab === 'logging' && (
-                <>
-                  <p>Configure server logging and query logging behavior.</p>
-                  <p>Query logging can help with troubleshooting but may impact performance.</p>
-                </>
-              )}
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                DNS blocking settings are managed on a dedicated page with full control over
+                block lists, blocked domains, allowed domains, and blocking behavior.
+              </p>
+              <Button asChild>
+                <Link to="/blocked">
+                  <Shield className="h-4 w-4 mr-2" />
+                  Manage DNS Blocking
+                  <ExternalLink className="h-4 w-4 ml-2" />
+                </Link>
+              </Button>
             </CardContent>
           </Card>
+        </TabsContent>
 
-          {/* Warning Notice */}
-          <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-            <p className="text-sm text-amber-900 dark:text-amber-100">
-              <strong>Note:</strong> Some settings may require the DNS server to restart to take effect. Changes are saved immediately when you click Save.
-            </p>
-          </div>
-        </div>
-      </div>
+        <TabsContent value="proxy" className="mt-6">
+          <ProxyForwardersSettings
+            settings={settings ?? undefined}
+            isLoading={isLoading}
+            onSave={handleSave}
+          />
+        </TabsContent>
+
+        <TabsContent value="logging" className="mt-6">
+          <LoggingSettings
+            settings={settings ?? undefined}
+            isLoading={isLoading}
+            onSave={handleSave}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
