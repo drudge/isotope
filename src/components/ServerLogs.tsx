@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Download,
   Trash2,
-  Loader2,
   FileText,
   AlertTriangle,
   Search,
@@ -12,6 +11,7 @@ import {
   PanelLeft,
   ChevronsUpDown,
 } from "lucide-react";
+import { IsotopeSpinner } from "@/components/ui/isotope-spinner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -261,7 +261,7 @@ export default function ServerLogs() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <IsotopeSpinner size="md" className="text-muted-foreground" />
       </div>
     );
   }
@@ -533,7 +533,7 @@ export default function ServerLogs() {
               <div className="flex-1 overflow-auto min-h-0 bg-muted/30" style={{ contain: "strict", contentVisibility: "auto" }}>
                 {loadingContent ? (
                   <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <IsotopeSpinner size="md" className="text-muted-foreground" />
                   </div>
                 ) : (
                   <div className="p-3 text-xs font-mono leading-relaxed">

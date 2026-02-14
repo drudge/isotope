@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, Plus, Power, PowerOff, Trash2, Settings2 } from 'lucide-react';
+import { Plus, Power, PowerOff, Trash2, Settings2 } from 'lucide-react';
+import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -202,7 +203,7 @@ export default function Dhcp() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+        <IsotopeSpinner size="md" className="text-muted-foreground" />
       </div>
     );
   }

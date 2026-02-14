@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
-import { RefreshCw, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
+import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -69,7 +70,7 @@ export function AppConfigDialog({
               <DialogDescription>Loading configuration...</DialogDescription>
             </DialogHeader>
             <div className="flex items-center justify-center py-16">
-              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+              <IsotopeSpinner size="md" className="text-muted-foreground" />
             </div>
           </>
         )}
@@ -133,7 +134,7 @@ function AppConfigDialogBody({
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+          <IsotopeSpinner size="md" className="text-muted-foreground" />
         </div>
       ) : noConfig ? (
         <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
@@ -164,7 +165,7 @@ function AppConfigDialogBody({
             <Suspense
               fallback={
                 <div className="flex items-center justify-center py-16">
-                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <IsotopeSpinner size="md" className="text-muted-foreground" />
                 </div>
               }
             >

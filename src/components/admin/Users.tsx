@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Trash2, Loader2, Plus, ChevronRight } from 'lucide-react';
+import { Trash2, Plus, ChevronRight } from 'lucide-react';
+import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CopyableText } from '@/components/ui/copyable-text';
@@ -211,7 +212,7 @@ export default function Users() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <IsotopeSpinner size="md" className="text-muted-foreground" />
       </div>
     );
   }

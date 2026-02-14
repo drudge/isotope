@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Loader2, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -179,7 +180,7 @@ export default function Permissions() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <IsotopeSpinner size="md" className="text-muted-foreground" />
       </div>
     );
   }
@@ -389,7 +390,7 @@ export default function Permissions() {
             <Button onClick={handleSave} disabled={saving}>
               {saving ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <IsotopeSpinner size="sm" className="mr-2" />
                   Saving...
                 </>
               ) : (

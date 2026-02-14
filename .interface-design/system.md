@@ -109,7 +109,34 @@ Layout: p-0 on DialogContent, internal px-6 for sections
 
 - Color changes: transition-colors
 - Opacity: transition-opacity
-- Loading: animate-spin on RefreshCw icon
+- Refresh buttons: animate-spin on RefreshCw icon (only while action is in progress)
+
+## Loading Indicators
+
+### IsotopeSpinner (`src/components/ui/isotope-spinner.tsx`)
+
+Branded loading spinner based on the Isotope atom logo. The electron orbits the nucleus while the nucleus pulses and the orbit ring breathes in opacity.
+
+| Size | Class | Dimensions | Usage |
+|------|-------|------------|-------|
+| `sm` | size-4 | 16px | Inline in buttons during form submission |
+| `md` | size-6 | 24px | Section/component loading states |
+| `lg` | size-12 | 48px | Full-page loading (e.g., auth check) |
+
+Usage:
+- Button: `<IsotopeSpinner size="sm" className="mr-2" />` + loading text
+- Section: `<IsotopeSpinner size="md" className="text-muted-foreground" />` centered in container
+- Full-page: `<IsotopeSpinner size="lg" className="text-muted-foreground" />` in `min-h-screen flex items-center justify-center`
+
+Props: `size` (`"sm" | "md" | "lg"`, default `"md"`), `className` (inherits text color via `currentColor`)
+
+### When to Use
+
+| Indicator | When |
+|-----------|------|
+| **IsotopeSpinner** | Action is processing (button submit, data fetching, auth check) |
+| **Skeleton** | Content shape is known (stat cards, lists, text blocks) — `animate-pulse` placeholder |
+| **RefreshCw animate-spin** | Only on refresh/resync buttons where the circular arrow icon is semantically meaningful |
 
 ## Page Layout
 

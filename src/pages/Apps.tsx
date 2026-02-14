@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
-import { RefreshCw, Store, Upload, Package } from 'lucide-react';
+import { Store, Upload, Package } from 'lucide-react';
+import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -179,7 +180,7 @@ export default function Apps() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+        <IsotopeSpinner size="md" className="text-muted-foreground" />
       </div>
     );
   }
