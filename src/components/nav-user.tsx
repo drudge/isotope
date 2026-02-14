@@ -9,7 +9,6 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { useTheme } from '@/components/theme-provider';
-import { cn } from '@/lib/utils';
 
 import {
   Avatar,
@@ -22,6 +21,8 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -107,39 +108,23 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <div className="flex items-center justify-center px-2 py-1.5">
-              <div
-                role="radiogroup"
-                aria-label="Theme"
-                className="inline-flex items-center gap-0.5 rounded-md border p-0.5"
-              >
-                {([
-                  { value: 'light' as const, icon: Sun, label: 'Light' },
-                  { value: 'system' as const, icon: Monitor, label: 'System' },
-                  { value: 'dark' as const, icon: Moon, label: 'Dark' },
-                ]).map(({ value, icon: Icon, label }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    role="radio"
-                    aria-checked={theme === value}
-                    aria-label={label}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setTheme(value);
-                    }}
-                    className={cn(
-                      "inline-flex h-7 w-7 items-center justify-center rounded-sm transition-colors",
-                      theme === value
-                        ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                  </button>
-                ))}
-              </div>
-            </div>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Theme</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as "light" | "dark" | "system")}>
+                <DropdownMenuRadioItem value="light">
+                  <Sun className="mr-2 h-4 w-4" />
+                  Light
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="system">
+                  <Monitor className="mr-2 h-4 w-4" />
+                  System
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="dark">
+                  <Moon className="mr-2 h-4 w-4" />
+                  Dark
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onLogout} className="text-destructive focus:text-destructive">
               <LogOut className="mr-2 h-4 w-4" />
