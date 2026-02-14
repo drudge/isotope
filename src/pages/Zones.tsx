@@ -1885,17 +1885,19 @@ function ZoneRecordsView({
                   >
                     {record.type}
                   </Badge>
-                  <span
-                    className="font-mono text-sm min-w-0 sm:min-w-[200px] truncate"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <CopyableText text={record.name} showIcon={false} />
+                  <span className="flex-[3] min-w-0" onClick={(e) => e.stopPropagation()}>
+                    <CopyableText
+                      text={record.name}
+                      iconVisibility="hover"
+                      className="font-mono text-sm w-full min-w-0"
+                    />
                   </span>
-                  <span
-                    className="font-mono text-sm text-muted-foreground flex-1 truncate hidden sm:block"
-                    title={formatRData(record)}
-                  >
-                    {formatRData(record)}
+                  <span className="flex-[2] min-w-0 hidden sm:block" onClick={(e) => e.stopPropagation()}>
+                    <CopyableText
+                      text={formatRData(record)}
+                      iconVisibility="hover"
+                      className="font-mono text-sm text-muted-foreground w-full min-w-0"
+                    />
                   </span>
                   <span className="text-xs text-muted-foreground w-12 sm:w-16 text-right shrink-0">
                     {record.ttl}s

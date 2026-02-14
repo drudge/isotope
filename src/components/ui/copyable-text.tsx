@@ -7,9 +7,10 @@ interface CopyableTextProps {
   text: string;
   className?: string;
   showIcon?: boolean;
+  iconVisibility?: 'always' | 'hover';
 }
 
-export function CopyableText({ text, className = '', showIcon = true }: CopyableTextProps) {
+export function CopyableText({ text, className = '', showIcon = true, iconVisibility = 'always' }: CopyableTextProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = (e: React.MouseEvent) => {
@@ -32,13 +33,17 @@ export function CopyableText({ text, className = '', showIcon = true }: Copyable
     );
   }
 
+  const iconClass = iconVisibility === 'hover'
+    ? 'h-5 w-5 hover:bg-muted shrink-0 opacity-0 group-hover/copy:opacity-100 transition-opacity'
+    : 'h-5 w-5 hover:bg-muted shrink-0';
+
   return (
-    <div className={`inline-flex items-center gap-1 ${className}`}>
-      <span>{text}</span>
+    <div className={`inline-flex items-center gap-1 group/copy ${className}`}>
+      <span className="truncate">{text}</span>
       <Button
         variant="ghost"
         size="icon"
-        className="h-5 w-5 hover:bg-muted"
+        className={iconClass}
         onClick={handleCopy}
         title="Copy to clipboard"
       >
