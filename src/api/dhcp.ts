@@ -1,20 +1,57 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '@/types/api';
 
-// Scopes
-export interface DhcpScope {
+// Scopes - list endpoint returns lightweight items
+export interface DhcpScopeListItem {
+  name: string;
+  enabled: boolean;
+  startingAddress: string;
+  endingAddress: string;
+  subnetMask: string;
+  networkAddress: string;
+  broadcastAddress: string;
+}
+
+// Scopes - get endpoint returns full detail
+export interface DhcpScopeDetail {
   name: string;
   startingAddress: string;
   endingAddress: string;
   subnetMask: string;
-  enabled: boolean;
   leaseTimeDays: number;
   leaseTimeHours: number;
   leaseTimeMinutes: number;
+  offerDelayTime: number;
+  pingCheckEnabled: boolean;
+  pingCheckTimeout: number;
+  pingCheckRetries: number;
+  domainName: string;
+  domainSearchList: string[];
+  dnsUpdates: boolean;
+  dnsTtl: number;
+  serverAddress: string;
+  serverHostName: string;
+  bootFileName: string;
+  routerAddress: string;
+  useThisDnsServer: boolean;
+  dnsServers: string[];
+  winsServers: string[];
+  ntpServers: string[];
+  ntpServerDomainNames?: string[];
+  staticRoutes: { destination: string; subnetMask: string; router: string }[];
+  vendorInfo: { identifier: string; information: string }[];
+  capwapAcIpAddresses: string[];
+  tftpServerAddresses: string[];
+  genericOptions: { code: number; value: string }[];
+  exclusions: { startingAddress: string; endingAddress: string }[];
+  reservedLeases: { hostName: string | null; hardwareAddress: string; address: string; comments: string }[];
+  allowOnlyReservedLeases: boolean;
+  blockLocallyAdministeredMacAddresses: boolean;
+  ignoreClientIdentifierOption: boolean;
 }
 
 export interface DhcpScopesListResponse {
-  scopes: DhcpScope[];
+  scopes: DhcpScopeListItem[];
 }
 
 export async function listDhcpScopes(): Promise<ApiResponse<DhcpScopesListResponse>> {
@@ -43,6 +80,9 @@ export interface SetDhcpScopeParams {
   leaseTimeHours?: string;
   leaseTimeMinutes?: string;
   offerDelayTime?: string;
+  pingCheckEnabled?: string;
+  pingCheckTimeout?: string;
+  pingCheckRetries?: string;
   domainName?: string;
   domainSearchList?: string;
   dnsUpdates?: string;
@@ -64,6 +104,8 @@ export interface SetDhcpScopeParams {
   exclusions?: string;
   reservedLeases?: string;
   allowOnlyReservedLeases?: string;
+  blockLocallyAdministeredMacAddresses?: string;
+  ignoreClientIdentifierOption?: string;
 }
 
 export async function setDhcpScope(params: SetDhcpScopeParams): Promise<ApiResponse<void>> {
@@ -76,8 +118,8 @@ export async function setDhcpScope(params: SetDhcpScopeParams): Promise<ApiRespo
   return apiClient.get<void>('/dhcp/scopes/set', queryParams);
 }
 
-export async function getDhcpScope(name: string): Promise<ApiResponse<DhcpScope>> {
-  return apiClient.get<DhcpScope>('/dhcp/scopes/get', { name });
+export async function getDhcpScope(name: string): Promise<ApiResponse<DhcpScopeDetail>> {
+  return apiClient.get<DhcpScopeDetail>('/dhcp/scopes/get', { name });
 }
 
 // Leases
