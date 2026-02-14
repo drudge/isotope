@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Plus, X } from "lucide-react";
 import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -19,7 +20,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   listPermissions,
@@ -32,7 +40,11 @@ import {
 } from "@/api/permissions";
 import { toast } from "sonner";
 
-export default function Permissions() {
+interface PermissionsProps {
+  onDataLoaded?: (count: number) => void;
+}
+
+export default function Permissions({ onDataLoaded }: PermissionsProps) {
   const [permissions, setPermissionsList] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -48,12 +60,28 @@ export default function Permissions() {
     GroupPermission[]
   >([]);
 
+  // Available users/groups for adding
+  const [availableUsers, setAvailableUsers] = useState<
+    Array<{ displayName: string; username: string; disabled: boolean }>
+  >([]);
+  const [availableGroups, setAvailableGroups] = useState<
+    Array<{ name: string; description: string }>
+  >([]);
+
+  // Popover state
+  const [userPickerOpen, setUserPickerOpen] = useState(false);
+  const [groupPickerOpen, setGroupPickerOpen] = useState(false);
+  const [userPickerFilter, setUserPickerFilter] = useState("");
+  const [groupPickerFilter, setGroupPickerFilter] = useState("");
+
   const fetchPermissions = async () => {
     setLoading(true);
     try {
       const response = await listPermissions();
       if (response.status === "ok" && response.response) {
-        setPermissionsList(response.response.permissions || []);
+        const permList = response.response.permissions || [];
+        setPermissionsList(permList);
+        onDataLoaded?.(permList.length);
       } else {
         toast.error("Failed to load permissions");
       }
@@ -76,6 +104,8 @@ export default function Permissions() {
         setSelectedSection(response.response);
         setEditUserPermissions(response.response.userPermissions || []);
         setEditGroupPermissions(response.response.groupPermissions || []);
+        setAvailableUsers(response.response.users || []);
+        setAvailableGroups(response.response.groups || []);
         setEditDialogOpen(true);
       } else {
         toast.error("Failed to load permission details");
@@ -103,8 +133,8 @@ export default function Permissions() {
 
       const response = await setPermissions({
         section: selectedSection.section,
-        userPermissions: userPermsString || undefined,
-        groupPermissions: groupPermsString || undefined,
+        userPermissions: userPermsString,
+        groupPermissions: groupPermsString,
       });
 
       if (response.status === "ok") {
@@ -143,39 +173,54 @@ export default function Permissions() {
     );
   };
 
-  const _addUserPermission = (username: string) => {
+  const addUserPermission = (username: string) => {
     if (!editUserPermissions.find((u) => u.username === username)) {
       setEditUserPermissions((prev) => [
         ...prev,
         { username, canView: false, canModify: false, canDelete: false },
       ]);
     }
+    setUserPickerOpen(false);
+    setUserPickerFilter("");
   };
 
-  const _addGroupPermission = (groupName: string) => {
+  const addGroupPermission = (groupName: string) => {
     if (!editGroupPermissions.find((g) => g.name === groupName)) {
       setEditGroupPermissions((prev) => [
         ...prev,
         { name: groupName, canView: false, canModify: false, canDelete: false },
       ]);
     }
+    setGroupPickerOpen(false);
+    setGroupPickerFilter("");
   };
 
-  const _removeUserPermission = (username: string) => {
+  const removeUserPermission = (username: string) => {
     setEditUserPermissions((prev) =>
       prev.filter((u) => u.username !== username),
     );
   };
 
-  const _removeGroupPermission = (groupName: string) => {
+  const removeGroupPermission = (groupName: string) => {
     setEditGroupPermissions((prev) => prev.filter((g) => g.name !== groupName));
   };
 
-  // Suppress unused variable warnings - these will be used in future UI implementation
-  void _addUserPermission;
-  void _addGroupPermission;
-  void _removeUserPermission;
-  void _removeGroupPermission;
+  // Filter available users/groups that aren't already in the permissions list
+  const filteredAvailableUsers = availableUsers
+    .filter((u) => u.username && !editUserPermissions.find((p) => p.username === u.username))
+    .filter(
+      (u) =>
+        (u.username || '').toLowerCase().includes(userPickerFilter.toLowerCase()) ||
+        (u.displayName || '').toLowerCase().includes(userPickerFilter.toLowerCase()),
+    );
+
+  const filteredAvailableGroups = availableGroups
+    .filter((g) => g.name && !editGroupPermissions.find((p) => p.name === g.name))
+    .filter(
+      (g) =>
+        (g.name || '').toLowerCase().includes(groupPickerFilter.toLowerCase()) ||
+        (g.description || '').toLowerCase().includes(groupPickerFilter.toLowerCase()),
+    );
 
   if (loading) {
     return (
@@ -193,7 +238,7 @@ export default function Permissions() {
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold">Permissions</h2>
               {permissions.length > 0 && (
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm text-muted-foreground hidden md:inline">
                   Total Sections: {permissions.length}
                 </span>
               )}
@@ -205,40 +250,108 @@ export default function Permissions() {
               <p className="font-medium">No permissions found</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Section</TableHead>
-                    <TableHead>User Permissions</TableHead>
-                    <TableHead>Group Permissions</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {permissions.map((permission) => (
-                    <TableRow
-                      key={permission.section}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => openEditDialog(permission)}
-                    >
-                      <TableCell className="font-medium">
-                        {permission.section}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {permission.userPermissions.length} user(s)
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {permission.groupPermissions.length} group(s)
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      </TableCell>
+            <>
+              {/* Mobile card layout */}
+              <div className="md:hidden divide-y">
+                {permissions.map((permission) => (
+                  <button
+                    key={permission.section}
+                    className="w-full text-left p-4 hover:bg-muted/50 flex items-center gap-3"
+                    onClick={() => openEditDialog(permission)}
+                  >
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <span className="font-medium text-sm">{permission.section}</span>
+                      <div className="flex flex-wrap gap-1">
+                        {permission.userPermissions.length > 0 && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {permission.userPermissions.length} user{permission.userPermissions.length !== 1 ? 's' : ''}
+                          </Badge>
+                        )}
+                        {permission.groupPermissions.length > 0 && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {permission.groupPermissions.length} group{permission.groupPermissions.length !== 1 ? 's' : ''}
+                          </Badge>
+                        )}
+                        {permission.userPermissions.length === 0 && permission.groupPermissions.length === 0 && (
+                          <span className="text-xs text-muted-foreground">No permissions set</span>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </button>
+                ))}
+              </div>
+
+              {/* Desktop table layout */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Section</TableHead>
+                      <TableHead>User Permissions</TableHead>
+                      <TableHead>Group Permissions</TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {permissions.map((permission) => (
+                      <TableRow
+                        key={permission.section}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => openEditDialog(permission)}
+                      >
+                        <TableCell className="font-medium">
+                          {permission.section}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {permission.userPermissions.length === 0 ? (
+                              <span className="text-sm text-muted-foreground">None</span>
+                            ) : (
+                              <>
+                                {permission.userPermissions.slice(0, 3).map((u) => (
+                                  <Badge key={u.username} variant="outline" className="text-xs font-mono">
+                                    {u.username}
+                                  </Badge>
+                                ))}
+                                {permission.userPermissions.length > 3 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{permission.userPermissions.length - 3} more
+                                  </Badge>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {permission.groupPermissions.length === 0 ? (
+                              <span className="text-sm text-muted-foreground">None</span>
+                            ) : (
+                              <>
+                                {permission.groupPermissions.slice(0, 3).map((g) => (
+                                  <Badge key={g.name} variant="outline" className="text-xs">
+                                    {g.name}
+                                  </Badge>
+                                ))}
+                                {permission.groupPermissions.length > 3 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{permission.groupPermissions.length - 3} more
+                                  </Badge>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -248,7 +361,11 @@ export default function Permissions() {
         open={editDialogOpen}
         onOpenChange={(open) => {
           setEditDialogOpen(open);
-          if (!open) setSelectedSection(null);
+          if (!open) {
+            setSelectedSection(null);
+            setUserPickerFilter("");
+            setGroupPickerFilter("");
+          }
         }}
       >
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -268,10 +385,55 @@ export default function Permissions() {
                 <Label className="text-base font-semibold">
                   Group Permissions
                 </Label>
+                <Popover open={groupPickerOpen} onOpenChange={(open) => {
+                  setGroupPickerOpen(open);
+                  if (!open) setGroupPickerFilter("");
+                }}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1">
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Group
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-0" align="end">
+                    <div className="p-2">
+                      <Input
+                        placeholder="Search groups..."
+                        value={groupPickerFilter}
+                        onChange={(e) => setGroupPickerFilter(e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                    <ScrollArea className="max-h-48">
+                      <div className="p-1">
+                        {filteredAvailableGroups.length === 0 ? (
+                          <p className="px-2 py-3 text-sm text-muted-foreground text-center">
+                            {availableGroups.length === 0 ? "No groups available" : "All groups already added"}
+                          </p>
+                        ) : (
+                          filteredAvailableGroups.map((group) => (
+                            <button
+                              key={group.name}
+                              className="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-sm"
+                              onClick={() => addGroupPermission(group.name)}
+                            >
+                              <span className="font-medium">{group.name}</span>
+                              {group.description && (
+                                <span className="text-muted-foreground ml-1 text-xs">
+                                  ({group.description})
+                                </span>
+                              )}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
               </div>
               {editGroupPermissions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No group permissions configured
+                  No group permissions configured. Click &ldquo;Add Group&rdquo; to get started.
                 </p>
               ) : (
                 <div className="border rounded-md">
@@ -282,6 +444,7 @@ export default function Permissions() {
                         <TableHead className="text-center">View</TableHead>
                         <TableHead className="text-center">Modify</TableHead>
                         <TableHead className="text-center">Delete</TableHead>
+                        <TableHead className="w-[40px]"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -314,6 +477,16 @@ export default function Permissions() {
                               }
                             />
                           </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => removeGroupPermission(group.name)}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -328,10 +501,55 @@ export default function Permissions() {
                 <Label className="text-base font-semibold">
                   User Permissions
                 </Label>
+                <Popover open={userPickerOpen} onOpenChange={(open) => {
+                  setUserPickerOpen(open);
+                  if (!open) setUserPickerFilter("");
+                }}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-1">
+                      <Plus className="h-3.5 w-3.5" />
+                      Add User
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-0" align="end">
+                    <div className="p-2">
+                      <Input
+                        placeholder="Search users..."
+                        value={userPickerFilter}
+                        onChange={(e) => setUserPickerFilter(e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                    <ScrollArea className="max-h-48">
+                      <div className="p-1">
+                        {filteredAvailableUsers.length === 0 ? (
+                          <p className="px-2 py-3 text-sm text-muted-foreground text-center">
+                            {availableUsers.length === 0 ? "No users available" : "All users already added"}
+                          </p>
+                        ) : (
+                          filteredAvailableUsers.map((user) => (
+                            <button
+                              key={user.username}
+                              className="w-full text-left px-2 py-1.5 rounded hover:bg-accent text-sm"
+                              onClick={() => addUserPermission(user.username)}
+                            >
+                              <span className="font-mono">{user.username}</span>
+                              {user.displayName && (
+                                <span className="text-muted-foreground ml-1 text-xs">
+                                  ({user.displayName})
+                                </span>
+                              )}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
               </div>
               {editUserPermissions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  No user permissions configured
+                  No user permissions configured. Click &ldquo;Add User&rdquo; to get started.
                 </p>
               ) : (
                 <div className="border rounded-md">
@@ -342,6 +560,7 @@ export default function Permissions() {
                         <TableHead className="text-center">View</TableHead>
                         <TableHead className="text-center">Modify</TableHead>
                         <TableHead className="text-center">Delete</TableHead>
+                        <TableHead className="w-[40px]"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -374,6 +593,16 @@ export default function Permissions() {
                               }
                             />
                           </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => removeUserPermission(user.username)}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -394,9 +623,7 @@ export default function Permissions() {
                   Saving...
                 </>
               ) : (
-                <>
-                                    Save
-                </>
+                "Save"
               )}
             </Button>
           </DialogFooter>

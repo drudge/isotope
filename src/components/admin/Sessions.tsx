@@ -3,6 +3,7 @@ import { Trash2, Plus, Copy, Check } from 'lucide-react';
 import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { CopyableText } from '@/components/ui/copyable-text';
 import {
   Table,
@@ -36,7 +37,16 @@ import { listSessions, deleteSession, createToken, type Session } from '@/api/se
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 
-export default function Sessions() {
+const clampToNow = (date: Date) => {
+  const now = new Date();
+  return date > now ? now : date;
+};
+
+interface SessionsProps {
+  onDataLoaded?: (count: number) => void;
+}
+
+export default function Sessions({ onDataLoaded }: SessionsProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -51,7 +61,9 @@ export default function Sessions() {
     try {
       const response = await listSessions();
       if (response.status === 'ok' && response.response) {
-        setSessions(response.response.sessions || []);
+        const sessionList = response.response.sessions || [];
+        setSessions(sessionList);
+        onDataLoaded?.(sessionList.length);
       } else {
         toast.error('Failed to load sessions');
       }
@@ -139,7 +151,7 @@ export default function Sessions() {
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold">Active Sessions</h2>
               {sessions.length > 0 && (
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm text-muted-foreground hidden md:inline">
                   Total: {sessions.length}
                 </span>
               )}
@@ -155,86 +167,119 @@ export default function Sessions() {
               <p className="font-medium">No active sessions</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Username</TableHead>
-                    <TableHead>Session</TableHead>
-                    <TableHead>Last Seen</TableHead>
-                    <TableHead>Remote Address</TableHead>
-                    <TableHead>User Agent</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sessions.map((session) => (
-                    <TableRow key={session.partialToken}>
-                      <TableCell className="font-medium">{session.username}</TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-mono text-xs">
-                            [{session.partialToken}]
-                            {session.isCurrentSession && (
-                              <span className="ml-2 text-xs text-green-600 dark:text-green-400">(current)</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={
-                                session.type === 'ApiToken'
-                                  ? 'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                                  : 'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted'
-                              }
-                            >
-                              {session.type === 'ApiToken' ? 'API Token' : 'Standard'}
-                            </span>
-                            {session.tokenName && (
-                              <span className="text-xs text-muted-foreground">{session.tokenName}</span>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="text-sm">
-                            {new Date(session.lastSeen).toLocaleString([], {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              second: '2-digit',
-                            })}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            ({formatDistanceToNow(new Date(session.lastSeen), { addSuffix: true })})
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        <CopyableText text={session.lastSeenRemoteAddress} showIcon={false} />
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate text-sm text-muted-foreground" title={session.lastSeenUserAgent}>
-                        {session.lastSeenUserAgent}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteConfirm(session.partialToken)}
-                          disabled={session.isCurrentSession}
-                          className="gap-2 text-destructive hover:text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete
-                        </Button>
-                      </TableCell>
+            <>
+              {/* Mobile card layout */}
+              <div className="md:hidden divide-y">
+                {sessions.map((session) => (
+                  <div key={session.partialToken} className="p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">{session.username}</span>
+                        <Badge variant={session.type === 'ApiToken' ? 'default' : 'secondary'} className="text-[10px]">
+                          {session.type === 'ApiToken' ? 'API Token' : 'Standard'}
+                        </Badge>
+                        {session.isCurrentSession && (
+                          <span className="text-[10px] text-green-600 dark:text-green-400 font-medium">(current)</span>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDeleteConfirm(session.partialToken)}
+                        disabled={session.isCurrentSession}
+                        className="h-7 px-2 text-destructive hover:text-destructive disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="font-mono">[{session.partialToken}]</span>
+                      {session.tokenName && <span>{session.tokenName}</span>}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(clampToNow(new Date(session.lastSeen)), { addSuffix: true })} from{' '}
+                      <CopyableText text={session.lastSeenRemoteAddress} showIcon={false} className="font-mono" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop table layout */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Username</TableHead>
+                      <TableHead>Session</TableHead>
+                      <TableHead>Last Seen</TableHead>
+                      <TableHead>Remote Address</TableHead>
+                      <TableHead>User Agent</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {sessions.map((session) => (
+                      <TableRow key={session.partialToken}>
+                        <TableCell className="font-medium">{session.username}</TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="font-mono text-xs">
+                              [{session.partialToken}]
+                              {session.isCurrentSession && (
+                                <span className="ml-2 text-xs text-green-600 dark:text-green-400">(current)</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={session.type === 'ApiToken' ? 'default' : 'secondary'} className="text-xs">
+                                {session.type === 'ApiToken' ? 'API Token' : 'Standard'}
+                              </Badge>
+                              {session.tokenName && (
+                                <span className="text-xs text-muted-foreground">{session.tokenName}</span>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="text-sm">
+                              {new Date(session.lastSeen).toLocaleString([], {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                              })}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              ({formatDistanceToNow(clampToNow(new Date(session.lastSeen)), { addSuffix: true })})
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          <CopyableText text={session.lastSeenRemoteAddress} showIcon={false} />
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate text-sm text-muted-foreground" title={session.lastSeenUserAgent}>
+                          {session.lastSeenUserAgent}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeleteConfirm(session.partialToken)}
+                            disabled={session.isCurrentSession}
+                            className="gap-2 text-destructive hover:text-destructive disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
