@@ -133,41 +133,41 @@ export default function Settings() {
       {/* Tabs */}
       <Tabs value={currentTab} onValueChange={handleTabChange}>
         <TabsList className="w-full grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 h-auto gap-1">
-          <TabsTrigger value="general" className="gap-1 px-2 py-1.5">
+          <TabsTrigger value="general" className="flex-col gap-1 px-2 py-2">
             <Server className="h-4 w-4" />
-            <span className="hidden xl:inline text-xs">General</span>
+            <span className="text-[11px] leading-tight">General</span>
           </TabsTrigger>
-          <TabsTrigger value="web-service" className="gap-1 px-2 py-1.5">
+          <TabsTrigger value="web-service" className="flex-col gap-1 px-2 py-2">
             <Globe className="h-4 w-4" />
-            <span className="hidden xl:inline text-xs">Web</span>
+            <span className="text-[11px] leading-tight">Web</span>
           </TabsTrigger>
-          <TabsTrigger value="protocols" className="gap-1 px-2 py-1.5">
+          <TabsTrigger value="protocols" className="flex-col gap-1 px-2 py-2">
             <Network className="h-4 w-4" />
-            <span className="hidden xl:inline text-xs">Protocols</span>
+            <span className="text-[11px] leading-tight">Protocols</span>
           </TabsTrigger>
-          <TabsTrigger value="tsig" className="gap-1 px-2 py-1.5">
+          <TabsTrigger value="tsig" className="flex-col gap-1 px-2 py-2">
             <Key className="h-4 w-4" />
-            <span className="hidden xl:inline text-xs">TSIG</span>
+            <span className="text-[11px] leading-tight">TSIG</span>
           </TabsTrigger>
-          <TabsTrigger value="recursion" className="gap-1 px-2 py-1.5">
+          <TabsTrigger value="recursion" className="flex-col gap-1 px-2 py-2">
             <RefreshCw className="h-4 w-4" />
-            <span className="hidden xl:inline text-xs">Recursion</span>
+            <span className="text-[11px] leading-tight">Recursion</span>
           </TabsTrigger>
-          <TabsTrigger value="cache" className="gap-1 px-2 py-1.5">
+          <TabsTrigger value="cache" className="flex-col gap-1 px-2 py-2">
             <Database className="h-4 w-4" />
-            <span className="hidden xl:inline text-xs">Cache</span>
+            <span className="text-[11px] leading-tight">Cache</span>
           </TabsTrigger>
-          <TabsTrigger value="blocking" className="gap-1 px-2 py-1.5">
+          <TabsTrigger value="blocking" className="flex-col gap-1 px-2 py-2">
             <Shield className="h-4 w-4" />
-            <span className="hidden xl:inline text-xs">Blocking</span>
+            <span className="text-[11px] leading-tight">Blocking</span>
           </TabsTrigger>
-          <TabsTrigger value="proxy" className="gap-1 px-2 py-1.5">
+          <TabsTrigger value="proxy" className="flex-col gap-1 px-2 py-2">
             <Waypoints className="h-4 w-4" />
-            <span className="hidden xl:inline text-xs">Proxy</span>
+            <span className="text-[11px] leading-tight">Proxy</span>
           </TabsTrigger>
-          <TabsTrigger value="logging" className="gap-1 px-2 py-1.5">
+          <TabsTrigger value="logging" className="flex-col gap-1 px-2 py-2">
             <FileText className="h-4 w-4" />
-            <span className="hidden xl:inline text-xs">Logging</span>
+            <span className="text-[11px] leading-tight">Logging</span>
           </TabsTrigger>
         </TabsList>
 
