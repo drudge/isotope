@@ -226,7 +226,7 @@ export default function DnsClient() {
           <Card className="border-2">
             <CardContent className="pt-6 space-y-3">
               {/* Row 1: Domain + Type + Resolve */}
-              <div className="flex gap-2 sm:gap-3">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -248,24 +248,26 @@ export default function DnsClient() {
                     </button>
                   )}
                 </div>
-                <Select value={recordType} onValueChange={setRecordType}>
-                  <SelectTrigger className="w-24 shrink-0">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {RECORD_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>{type}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button onClick={() => handleQuery()} disabled={isQuerying} className="shrink-0">
-                  {isQuerying ? (
-                    <IsotopeSpinner size="sm" className="sm:mr-2" />
-                  ) : (
-                    <Search className="h-4 w-4 sm:mr-2" />
-                  )}
-                  <span className="hidden sm:inline">{isQuerying ? 'Resolving...' : 'Resolve'}</span>
-                </Button>
+                <div className="flex gap-2 sm:gap-3">
+                  <Select value={recordType} onValueChange={setRecordType}>
+                    <SelectTrigger className="w-24 shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RECORD_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>{type}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={() => handleQuery()} disabled={isQuerying} className="shrink-0">
+                    {isQuerying ? (
+                      <IsotopeSpinner size="sm" className="sm:mr-2" />
+                    ) : (
+                      <Search className="h-4 w-4 sm:mr-2" />
+                    )}
+                    <span className="hidden sm:inline">{isQuerying ? 'Resolving...' : 'Resolve'}</span>
+                  </Button>
+                </div>
               </div>
 
               {/* Row 2: Server + Protocol + EDNS + DNSSEC */}

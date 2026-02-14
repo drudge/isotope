@@ -496,13 +496,12 @@ export default function ServerLogs() {
                 )}
                 <div className="flex items-center gap-1 shrink-0">
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => setDeleteConfirm(viewingLog)}
-                    className="h-8 shrink-0 text-destructive hover:text-destructive"
+                    className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
                   >
-                    <Trash2 className="h-4 w-4 sm:mr-1.5" />
-                    <span className="hidden sm:inline">Delete</span>
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="outline"

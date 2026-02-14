@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Settings } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -9,9 +8,12 @@ import QueryLogs from "@/components/QueryLogs";
 
 export default function Logs() {
   useDocumentTitle("Logs");
-  const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get("tab") === "queries" ? "queries" : "server";
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get("tab") === "queries" ? "queries" : "server";
+
+  const handleTabChange = (tab: string) => {
+    setSearchParams(tab === "server" ? {} : { tab: "queries" }, { replace: true });
+  };
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -33,7 +35,7 @@ export default function Logs() {
 
       <Tabs
         value={activeTab}
-        onValueChange={setActiveTab}
+        onValueChange={handleTabChange}
         className="flex-1 flex flex-col min-h-0"
       >
         <TabsList className="w-full sm:w-fit grid grid-cols-2 sm:flex">
