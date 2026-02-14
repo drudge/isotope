@@ -111,7 +111,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <div className="flex items-center gap-2">
-              <SidebarMenuButton size="lg" asChild className="flex-1">
+              <SidebarMenuButton size="lg" asChild className="flex-1" tooltip={serverInfo?.version ? `Isotope — Technitium DNS v${serverInfo.version}` : "Isotope"}>
                 <Link to="/">
                   <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                     <svg

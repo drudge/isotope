@@ -1,9 +1,13 @@
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useApi } from "@/hooks/useApi";
+import { getServerInfo } from "@/api/dns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExternalLink } from "lucide-react";
 
 export default function About() {
   useDocumentTitle("About");
+  const { data: serverInfo } = useApi(() => getServerInfo(), []);
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="text-center py-8">
@@ -32,6 +36,25 @@ export default function About() {
         <p className="text-muted-foreground">
           A clean, fast interface for Technitium DNS Server
         </p>
+        {serverInfo && (
+          <div className="flex items-center justify-center gap-4 mt-3 text-xs text-muted-foreground">
+            {serverInfo.version && (
+              <span>Technitium v{serverInfo.version}</span>
+            )}
+            {serverInfo.dnsServerDomain && (
+              <>
+                <span className="text-border">|</span>
+                <span>{serverInfo.dnsServerDomain}</span>
+              </>
+            )}
+            {serverInfo.uptime && (
+              <>
+                <span className="text-border">|</span>
+                <span>Uptime: {serverInfo.uptime}</span>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <Card>
