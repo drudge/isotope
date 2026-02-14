@@ -13,9 +13,10 @@ import {
   LogOut,
   ArrowUp,
   MoreVertical,
-  Loader2,
+
   AlertTriangle,
 } from 'lucide-react';
+import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useApi } from '@/hooks/useApi';
 import { Button } from '@/components/ui/button';
@@ -965,7 +966,7 @@ export default function Cluster() {
             <Button onClick={handleInitialize} disabled={initLoading}>
               {initLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <IsotopeSpinner size="sm" className="mr-2" />
                   Initializing...
                 </>
               ) : (
@@ -1117,7 +1118,7 @@ export default function Cluster() {
             {joinLoading && (
               <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
                 <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                  <IsotopeSpinner size="sm" className="text-blue-600" />
                   <div className="text-sm text-blue-900 dark:text-blue-100">
                     <strong>Joining Cluster...</strong>
                     <p className="text-xs mt-1">
@@ -1137,7 +1138,7 @@ export default function Cluster() {
             <Button onClick={handleJoin} disabled={joinLoading}>
               {joinLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <IsotopeSpinner size="sm" className="mr-2" />
                   Joining...
                 </>
               ) : (
@@ -1218,7 +1219,7 @@ export default function Cluster() {
             <Button onClick={handleSaveOptions} disabled={optionsLoading}>
               {optionsLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <IsotopeSpinner size="sm" className="mr-2" />
                   Saving...
                 </>
               ) : (
@@ -1262,7 +1263,7 @@ export default function Cluster() {
             <Button onClick={handleUpdateIp} disabled={updateIpLoading}>
               {updateIpLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <IsotopeSpinner size="sm" className="mr-2" />
                   Updating...
                 </>
               ) : (
@@ -1318,7 +1319,7 @@ export default function Cluster() {
             <Button onClick={handleUpdatePrimary} disabled={updatePrimaryLoading}>
               {updatePrimaryLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <IsotopeSpinner size="sm" className="mr-2" />
                   Updating...
                 </>
               ) : (

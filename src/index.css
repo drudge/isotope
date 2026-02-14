@@ -142,6 +142,22 @@
   }
 }
 
+/* IsotopeSpinner animations */
+@keyframes isotope-orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes isotope-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+@keyframes isotope-ring {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.3; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-orbit,
   .animate-nucleus-pulse {

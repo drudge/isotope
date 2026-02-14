@@ -15,9 +15,9 @@ import {
   AlertTriangle,
   XCircle,
   X,
-  RefreshCw,
   type LucideIcon,
 } from 'lucide-react';
+import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -260,7 +260,7 @@ export default function DnsClient() {
                 </Select>
                 <Button onClick={() => handleQuery()} disabled={isQuerying} className="shrink-0">
                   {isQuerying ? (
-                    <RefreshCw className="h-4 w-4 sm:mr-2 animate-spin" />
+                    <IsotopeSpinner size="sm" className="sm:mr-2" />
                   ) : (
                     <Search className="h-4 w-4 sm:mr-2" />
                   )}

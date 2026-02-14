@@ -4,11 +4,11 @@ import {
   Search,
   Copy,
   Download,
-  Loader2,
   Filter,
   RotateCcw,
   X,
 } from "lucide-react";
+import { IsotopeSpinner } from "@/components/ui/isotope-spinner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -242,7 +242,7 @@ export default function QueryLogs() {
   if (loadingLoggers) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <IsotopeSpinner size="md" className="text-muted-foreground" />
       </div>
     );
   }
@@ -505,7 +505,7 @@ export default function QueryLogs() {
         <div className="flex-1 min-h-0 overflow-auto">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <IsotopeSpinner size="md" className="text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
                 Loading query logs...
               </p>

@@ -4,12 +4,12 @@ import {
   Search,
   Copy,
   Download,
-  Loader2,
   Filter,
   RotateCcw,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { IsotopeSpinner } from "@/components/ui/isotope-spinner";
 import {
   Dialog,
   DialogContent,
@@ -621,7 +621,7 @@ export default function QueryLogsModal({
           <div className="flex-1 overflow-auto overflow-x-auto">
             {loadingLoggers ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <IsotopeSpinner size="md" className="text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
                   Loading query loggers...
                 </p>
@@ -645,7 +645,7 @@ export default function QueryLogsModal({
               </div>
             ) : loading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <IsotopeSpinner size="md" className="text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
                   Loading query logs...
                 </p>
