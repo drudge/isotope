@@ -1,21 +1,20 @@
-import { useState, useEffect } from 'react';
-import { RefreshCw, Store, Upload, Settings, Trash2, Package, Download } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router';
+import { RefreshCw, Store, Upload, Package } from 'lucide-react';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   listApps,
   listStoreApps,
@@ -29,52 +28,98 @@ import {
   type StoreApp,
 } from '@/api/dns';
 import { toast } from 'sonner';
+import { InstalledAppsTab } from '@/components/apps/InstalledAppsTab';
+import { AppStoreTab } from '@/components/apps/AppStoreTab';
+import { AppConfigDialog } from '@/components/apps/AppConfigDialog';
+import { InstallAppDialog } from '@/components/apps/InstallAppDialog';
+
+type TabValue = 'installed' | 'store';
 
 export default function Apps() {
-  useDocumentTitle("Apps");
+  useDocumentTitle('Apps');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = (searchParams.get('tab') as TabValue) || 'installed';
+
   const [installedApps, setInstalledApps] = useState<InstalledApp[]>([]);
   const [storeApps, setStoreApps] = useState<StoreApp[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showStore, setShowStore] = useState(false);
-  const [showInstall, setShowInstall] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
-  const [selectedApp, setSelectedApp] = useState<InstalledApp | null>(null);
-  const [installName, setInstallName] = useState('');
-  const [installFile, setInstallFile] = useState<File | null>(null);
-  const [configText, setConfigText] = useState('');
   const [processing, setProcessing] = useState(false);
 
-  const fetchInstalledApps = async () => {
+  // Track which apps have real config (not just comments or empty)
+  const [appsWithConfig, setAppsWithConfig] = useState<Set<string>>(new Set());
+
+  // Dialog state
+  const [showInstall, setShowInstall] = useState(false);
+  const [configApp, setConfigApp] = useState<InstalledApp | null>(null);
+  const [uninstallTarget, setUninstallTarget] = useState<string | null>(null);
+
+  const checkAppConfigs = useCallback(async (apps: InstalledApp[]) => {
+    const results = await Promise.all(
+      apps.map(async (app) => {
+        const response = await getAppConfig(app.name);
+        if (response.status === 'ok' && response.response) {
+          const raw = (response.response.config || '').trim();
+          if (!raw) return null;
+          // Check if config is only comments
+          const lines = raw.split('\n');
+          const isOnlyComments = lines.every((line) => {
+            const trimmed = line.trim();
+            return !trimmed || trimmed.startsWith('#') || trimmed.startsWith('//');
+          });
+          return isOnlyComments ? null : app.name;
+        }
+        return null;
+      })
+    );
+    setAppsWithConfig(new Set(results.filter((n): n is string => n !== null)));
+  }, []);
+
+  const fetchInstalledApps = useCallback(async () => {
     const response = await listApps();
     if (response.status === 'ok' && response.response) {
-      setInstalledApps(response.response.apps || []);
+      const apps = response.response.apps || [];
+      setInstalledApps(apps);
+      return apps;
     }
-  };
+    return [];
+  }, []);
 
-  const fetchStoreApps = async () => {
+  const fetchStoreApps = useCallback(async () => {
     const response = await listStoreApps();
     if (response.status === 'ok' && response.response) {
       setStoreApps(response.response.storeApps || []);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([fetchInstalledApps(), fetchStoreApps()]);
+      const [apps] = await Promise.all([fetchInstalledApps(), fetchStoreApps()]);
       setLoading(false);
+      // Check configs in background after page renders
+      if (apps.length > 0) {
+        checkAppConfigs(apps).catch(() => {});
+      }
     };
     loadData();
-  }, []);
+  }, [fetchInstalledApps, fetchStoreApps, checkAppConfigs]);
+
+  const handleTabChange = (value: string) => {
+    if (value === 'installed') {
+      searchParams.delete('tab');
+    } else {
+      searchParams.set('tab', value);
+    }
+    setSearchParams(searchParams, { replace: true });
+  };
 
   const handleInstallFromStore = async (app: StoreApp) => {
     setProcessing(true);
     const response = await downloadAndInstallApp(app.name, app.url);
     setProcessing(false);
-
     if (response.status === 'ok') {
       toast.success(`${app.name} installed successfully`);
-      await fetchInstalledApps();
+      await Promise.all([fetchInstalledApps(), fetchStoreApps()]);
     } else {
       toast.error(response.errorMessage || 'Failed to install app');
     }
@@ -84,89 +129,51 @@ export default function Apps() {
     setProcessing(true);
     const response = await downloadAndUpdateApp(app.name, app.url);
     setProcessing(false);
-
     if (response.status === 'ok') {
       toast.success(`${app.name} updated successfully`);
-      await fetchInstalledApps();
+      await Promise.all([fetchInstalledApps(), fetchStoreApps()]);
     } else {
       toast.error(response.errorMessage || 'Failed to update app');
     }
   };
 
-  const handleInstallFromFile = async () => {
-    if (!installName.trim() || !installFile) {
-      toast.error('Please provide app name and file');
-      return;
-    }
-
+  const handleInstallFromFile = async (name: string, file: File) => {
     setProcessing(true);
-    const response = await installApp(installName, installFile);
+    const response = await installApp(name, file);
     setProcessing(false);
-
     if (response.status === 'ok') {
-      toast.success(`${installName} installed successfully`);
-      await fetchInstalledApps();
+      toast.success(`${name} installed successfully`);
       setShowInstall(false);
-      setInstallName('');
-      setInstallFile(null);
+      await fetchInstalledApps();
     } else {
       toast.error(response.errorMessage || 'Failed to install app');
     }
   };
 
-  const handleUninstall = async (name: string) => {
-    if (!confirm(`Are you sure you want to uninstall ${name}?`)) {
-      return;
-    }
-
+  const handleConfirmUninstall = async () => {
+    if (!uninstallTarget) return;
     setProcessing(true);
-    const response = await uninstallApp(name);
+    const response = await uninstallApp(uninstallTarget);
     setProcessing(false);
-
     if (response.status === 'ok') {
-      toast.success(`${name} uninstalled successfully`);
+      toast.success(`${uninstallTarget} uninstalled successfully`);
+      setUninstallTarget(null);
       await fetchInstalledApps();
     } else {
       toast.error(response.errorMessage || 'Failed to uninstall app');
     }
   };
 
-  const handleOpenConfig = async (app: InstalledApp) => {
-    setSelectedApp(app);
+  const handleSaveConfig = async (name: string, config: string) => {
     setProcessing(true);
-    const response = await getAppConfig(app.name);
+    const response = await setAppConfig(name, config);
     setProcessing(false);
-
-    if (response.status === 'ok' && response.response) {
-      setConfigText(response.response.config || '');
-      setShowConfig(true);
-    } else {
-      toast.error(response.errorMessage || 'Failed to load config');
-    }
-  };
-
-  const handleSaveConfig = async () => {
-    if (!selectedApp) return;
-
-    setProcessing(true);
-    const response = await setAppConfig(selectedApp.name, configText);
-    setProcessing(false);
-
     if (response.status === 'ok') {
-      toast.success('Config saved successfully');
-      setShowConfig(false);
+      toast.success('Configuration saved');
+      setConfigApp(null);
     } else {
       toast.error(response.errorMessage || 'Failed to save config');
     }
-  };
-
-  const getStoreApp = (appName: string) => {
-    return storeApps.find((a) => a.name === appName);
-  };
-
-  const hasUpdate = (app: InstalledApp) => {
-    const storeApp = getStoreApp(app.name);
-    return storeApp && storeApp.version !== app.version;
   };
 
   if (loading) {
@@ -180,251 +187,94 @@ export default function Apps() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Installed Apps</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Apps</h1>
           <p className="text-muted-foreground mt-1">
-            Total Apps: {installedApps.length}
+            Manage DNS applications and extensions
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowStore(true)}>
-            <Store className="h-4 w-4 mr-2" />
-            App Store
-          </Button>
-          <Button onClick={() => setShowInstall(true)}>
-            <Upload className="h-4 w-4 mr-2" />
-            Install
-          </Button>
-        </div>
+        <Button onClick={() => setShowInstall(true)} className="gap-2 shrink-0 w-full sm:w-auto">
+          <Upload className="h-4 w-4" />
+          Install from File
+        </Button>
       </div>
 
-      {/* Installed Apps */}
-      {installedApps.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Package className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
-            <p className="text-muted-foreground mb-1">No apps installed</p>
-            <p className="text-sm text-muted-foreground">
-              Install apps from the App Store to get started
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {installedApps.map((app) => {
-            const updateAvailable = hasUpdate(app);
-            const storeApp = getStoreApp(app.name);
+      {/* Tabs */}
+      <Tabs value={currentTab} onValueChange={handleTabChange}>
+        <TabsList className="w-full sm:w-fit">
+          <TabsTrigger value="installed" className="gap-1.5 sm:flex-initial">
+            <Package className="h-4 w-4" />
+            Installed
+            <Badge variant="secondary" className="text-[10px] ml-0.5 px-1.5 min-w-[1.25rem] justify-center">
+              {installedApps.length}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="store" className="gap-1.5 sm:flex-initial">
+            <Store className="h-4 w-4" />
+            App Store
+          </TabsTrigger>
+        </TabsList>
 
-            return (
-              <Card key={app.name}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap mb-2">
-                        <CardTitle>{app.name}</CardTitle>
-                        <Badge variant="secondary">Version {app.version}</Badge>
-                        {updateAvailable && storeApp && (
-                          <Badge variant="default">Update Available</Badge>
-                        )}
-                      </div>
-                      {app.dnsApps && app.dnsApps.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {app.dnsApps.map((dnsApp, idx) => (
-                            <Badge key={idx} variant="outline" className="font-normal">
-                              {dnsApp.classPath.split('.').pop()}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      {app.dnsApps && app.dnsApps.length > 0 && app.dnsApps[0]?.description && (
-                        <CardDescription>
-                          {app.dnsApps[0].description}
-                        </CardDescription>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      {updateAvailable && storeApp && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => handleUpdateFromStore(storeApp)}
-                          disabled={processing}
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Update
-                        </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenConfig(app)}
-                      >
-                        <Settings className="h-4 w-4 mr-2" />
-                        Config
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleUninstall(app.name)}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Uninstall
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+        <TabsContent value="installed" className="mt-6">
+          <InstalledAppsTab
+            apps={installedApps}
+            storeApps={storeApps}
+            appsWithConfig={appsWithConfig}
+            processing={processing}
+            onConfig={setConfigApp}
+            onUpdate={handleUpdateFromStore}
+            onUninstall={setUninstallTarget}
+          />
+        </TabsContent>
 
-      {/* App Store Dialog */}
-      <Dialog open={showStore} onOpenChange={setShowStore}>
-        <DialogContent className="max-w-[90vw] max-h-[85vh] flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-4 border-b">
-            <DialogTitle>DNS App Store</DialogTitle>
-            <DialogDescription>Store Apps</DialogDescription>
-          </DialogHeader>
-          <div className="overflow-y-auto px-6 flex-1">
-            <div className="space-y-3 py-4">
-              {storeApps.map((app) => {
-                const installed = installedApps.find((a) => a.name === app.name);
-                const updateAvailable = installed && installed.version !== app.version;
-
-                return (
-                  <Card key={app.name}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap mb-2">
-                            <CardTitle className="text-base">{app.name}</CardTitle>
-                            <Badge variant="secondary">v{app.version}</Badge>
-                            {installed && (
-                              <Badge variant="outline">Installed</Badge>
-                            )}
-                          </div>
-                          <CardDescription className="mb-2">
-                            {app.description}
-                          </CardDescription>
-                          <div className="text-xs text-muted-foreground">
-                            <p>Size: {app.size}</p>
-                          </div>
-                        </div>
-                        <div className="shrink-0">
-                          {installed ? (
-                            updateAvailable ? (
-                              <Button
-                                size="sm"
-                                onClick={() => handleUpdateFromStore(app)}
-                                disabled={processing}
-                              >
-                                Update
-                              </Button>
-                            ) : (
-                              <Button size="sm" variant="outline" disabled>
-                                Installed
-                              </Button>
-                            )
-                          ) : (
-                            <Button
-                              size="sm"
-                              onClick={() => handleInstallFromStore(app)}
-                              disabled={processing}
-                            >
-                              Install
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardHeader>
-                  </Card>
-                );
-              })}
-            </div>
-          </div>
-          <DialogFooter className="px-6 py-4 border-t">
-            <Button variant="outline" onClick={() => setShowStore(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Install App Dialog */}
-      <Dialog open={showInstall} onOpenChange={setShowInstall}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Install App</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="app-name">App Name</Label>
-              <Input
-                id="app-name"
-                value={installName}
-                onChange={(e) => setInstallName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="app-file">App Zip File</Label>
-              <Input
-                id="app-file"
-                type="file"
-                accept=".zip"
-                onChange={(e) => setInstallFile(e.target.files?.[0] || null)}
-              />
-              {installFile && (
-                <p className="text-xs text-muted-foreground">
-                  No file selected.
-                </p>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowInstall(false)}>
-              Close
-            </Button>
-            <Button onClick={handleInstallFromFile} disabled={processing}>
-              Install
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <TabsContent value="store" className="mt-6">
+          <AppStoreTab
+            apps={storeApps}
+            processing={processing}
+            onInstall={handleInstallFromStore}
+            onUpdate={handleUpdateFromStore}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Config Dialog */}
-      <Dialog open={showConfig} onOpenChange={setShowConfig}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
-          <DialogHeader className="px-6 pt-6 pb-4 border-b">
-            <DialogTitle>App Config - {selectedApp?.name}</DialogTitle>
-            <DialogDescription>
-              Edit the <span className="font-mono text-xs">dnsApp.config</span> config file below as required by the DNS application.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="px-6 py-4 flex-1 overflow-hidden flex flex-col min-h-0">
-            <Label className="mb-2">Config File</Label>
-            <Textarea
-              value={configText}
-              onChange={(e) => setConfigText(e.target.value)}
-              className="font-mono text-sm flex-1 resize-none min-h-[400px]"
-            />
-            <Alert className="mt-4">
-              <AlertDescription>
-                Note: The app will reload the config automatically after you save it.
-              </AlertDescription>
-            </Alert>
-          </div>
-          <DialogFooter className="px-6 py-4 border-t">
-            <Button variant="outline" onClick={() => setShowConfig(false)}>
-              Close
-            </Button>
-            <Button onClick={handleSaveConfig} disabled={processing}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AppConfigDialog
+        open={!!configApp}
+        onOpenChange={(open) => { if (!open) setConfigApp(null); }}
+        app={configApp}
+        onSave={handleSaveConfig}
+        processing={processing}
+      />
+
+      {/* Install from File Dialog */}
+      <InstallAppDialog
+        open={showInstall}
+        onOpenChange={setShowInstall}
+        onInstall={handleInstallFromFile}
+        processing={processing}
+      />
+
+      {/* Uninstall Confirmation */}
+      <AlertDialog open={!!uninstallTarget} onOpenChange={(open) => { if (!open) setUninstallTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Uninstall {uninstallTarget}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the app from the DNS server. Any APP records using this application will not be removed automatically.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmUninstall}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Uninstall
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
