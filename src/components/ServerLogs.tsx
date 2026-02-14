@@ -43,7 +43,17 @@ export default function ServerLogs() {
   const [loadingContent, setLoadingContent] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedStacks, setExpandedStacks] = useState<Set<number>>(new Set());
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(() => {
+    return localStorage.getItem("logs_sidebar_hidden") === "true";
+  });
+
+  const toggleFileList = () => {
+    setIsExpanded(prev => {
+      const next = !prev;
+      localStorage.setItem("logs_sidebar_hidden", String(next));
+      return next;
+    });
+  };
 
   const handleView = useCallback(async (fileName: string) => {
     setViewingLog(fileName);
@@ -425,7 +435,7 @@ export default function ServerLogs() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => setIsExpanded(!isExpanded)}
+                  onClick={toggleFileList}
                   className="h-8 w-8 hidden lg:flex shrink-0"
                   title={isExpanded ? "Show file list" : "Hide file list"}
                 >

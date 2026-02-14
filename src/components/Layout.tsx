@@ -37,9 +37,14 @@ function LayoutContent() {
   );
 }
 
+function getSidebarDefault(): boolean {
+  const match = document.cookie.match(/(?:^|;\s*)sidebar_state=(\w+)/);
+  return match ? match[1] === "true" : true;
+}
+
 export default function Layout() {
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={getSidebarDefault()}>
       <AppSidebar />
       <LayoutContent />
     </SidebarProvider>
