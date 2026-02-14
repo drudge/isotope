@@ -1,10 +1,15 @@
 import {
   ChevronsUpDown,
   LogOut,
+  Monitor,
+  Moon,
   Settings,
+  Sun,
   User,
 } from 'lucide-react';
 import { Link } from 'react-router';
+import { useTheme } from '@/components/theme-provider';
+import { cn } from '@/lib/utils';
 
 import {
   Avatar,
@@ -39,6 +44,7 @@ export function NavUser({
   onLogout?: () => void;
 }) {
   const { isMobile } = useSidebar();
+  const { theme, setTheme } = useTheme();
 
   const initials = user.name
     .split(' ')
@@ -100,6 +106,40 @@ export function NavUser({
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <div className="flex items-center justify-center px-2 py-1.5">
+              <div
+                role="radiogroup"
+                aria-label="Theme"
+                className="inline-flex items-center gap-0.5 rounded-md border p-0.5"
+              >
+                {([
+                  { value: 'light' as const, icon: Sun, label: 'Light' },
+                  { value: 'system' as const, icon: Monitor, label: 'System' },
+                  { value: 'dark' as const, icon: Moon, label: 'Dark' },
+                ]).map(({ value, icon: Icon, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={theme === value}
+                    aria-label={label}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setTheme(value);
+                    }}
+                    className={cn(
+                      "inline-flex h-7 w-7 items-center justify-center rounded-sm transition-colors",
+                      theme === value
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </button>
+                ))}
+              </div>
+            </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onLogout} className="text-destructive focus:text-destructive">
               <LogOut className="mr-2 h-4 w-4" />
