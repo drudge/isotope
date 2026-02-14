@@ -46,6 +46,37 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
+          <div className="flex justify-center mb-2">
+            <svg
+              viewBox="0 0 512 512"
+              className="size-16 text-foreground"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <circle
+                cx="256"
+                cy="256"
+                r="200"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="24"
+                opacity="0.15"
+              />
+              <circle
+                cx="256"
+                cy="256"
+                r="80"
+                className="animate-nucleus-pulse"
+                style={{ transformOrigin: "256px 256px" }}
+              />
+              <g
+                className="animate-orbit"
+                style={{ transformOrigin: "256px 256px" }}
+              >
+                <circle cx="456" cy="256" r="28" />
+              </g>
+            </svg>
+          </div>
           <CardTitle className="text-2xl font-bold">Isotope</CardTitle>
           <CardDescription>
             Sign in to your Technitium DNS server
@@ -68,6 +99,7 @@ export default function Login() {
                 autoComplete="username"
                 required
                 disabled={isSubmitting}
+                autoFocus
               />
             </div>
             <div className="space-y-2">
