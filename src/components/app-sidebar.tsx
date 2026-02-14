@@ -19,7 +19,6 @@ import { useAuth } from "@/context/AuthContext";
 import { useApi } from "@/hooks/useApi";
 import { getServerInfo } from "@/api/dns";
 import { NavUser } from "@/components/nav-user";
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sidebar,
   SidebarContent,
@@ -153,9 +152,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavGroup label="System" items={systemNavItems} />
       </SidebarContent>
       <SidebarFooter>
-        <div className="flex items-center justify-center px-2 py-1">
-          <ThemeToggle />
-        </div>
         <NavUser user={userData} onLogout={logout} />
       </SidebarFooter>
       <SidebarRail />
