@@ -3,6 +3,7 @@ import { Trash2, Plus, ChevronRight } from 'lucide-react';
 import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { CopyableText } from '@/components/ui/copyable-text';
 import {
   Table,
@@ -33,16 +34,27 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { listUsers, createUser, deleteUser, setUserDetails, type User } from '@/api/users';
+import { listUsers, createUser, deleteUser, getUserDetails, setUserDetails, type User } from '@/api/users';
+import { listGroups, getGroupDetails, type Group } from '@/api/groups';
 import { toast } from 'sonner';
 
-export default function Users() {
+interface UsersProps {
+  onDataLoaded?: (count: number) => void;
+}
+
+export default function Users({ onDataLoaded }: UsersProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [addUserOpen, setAddUserOpen] = useState(false);
   const [editUserOpen, setEditUserOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  // Group membership data for table badges
+  const [userGroupsMap, setUserGroupsMap] = useState<Record<string, string[]>>({});
+
+  // All groups for edit dialog
+  const [allGroups, setAllGroups] = useState<Group[]>([]);
 
   // Add user form
   const [newDisplayName, setNewDisplayName] = useState('');
@@ -56,13 +68,42 @@ export default function Users() {
   const [editPassword, setEditPassword] = useState('');
   const [editPasswordConfirm, setEditPasswordConfirm] = useState('');
   const [editDisabled, setEditDisabled] = useState(false);
+  const [editMemberOfGroups, setEditMemberOfGroups] = useState<string[]>([]);
+
+  const fetchGroupMemberships = async () => {
+    try {
+      const groupsResponse = await listGroups();
+      if (groupsResponse.status === 'ok' && groupsResponse.response) {
+        const groups = groupsResponse.response.groups || [];
+        setAllGroups(groups);
+
+        const map: Record<string, string[]> = {};
+        await Promise.all(
+          groups.map(async (group) => {
+            const details = await getGroupDetails(group.name, true);
+            if (details.status === 'ok' && details.response?.members) {
+              for (const member of details.response.members) {
+                if (!map[member]) map[member] = [];
+                map[member].push(group.name);
+              }
+            }
+          })
+        );
+        setUserGroupsMap(map);
+      }
+    } catch (error) {
+      console.error('Failed to fetch group memberships:', error);
+    }
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
       const response = await listUsers();
       if (response.status === 'ok' && response.response) {
-        setUsers(response.response.users || []);
+        const userList = response.response.users || [];
+        setUsers(userList);
+        onDataLoaded?.(userList.length);
       } else {
         toast.error('Failed to load users');
       }
@@ -76,6 +117,7 @@ export default function Users() {
 
   useEffect(() => {
     fetchUsers();
+    fetchGroupMemberships();
   }, []);
 
   const handleAddUser = async () => {
@@ -130,6 +172,7 @@ export default function Users() {
         newUsername?: string;
         newPassword?: string;
         disabled?: boolean;
+        memberOfGroups?: string[];
       } = {
         username: selectedUser.username,
       };
@@ -150,6 +193,9 @@ export default function Users() {
         params.disabled = editDisabled;
       }
 
+      // Always send group membership
+      params.memberOfGroups = editMemberOfGroups;
+
       const response = await setUserDetails(params);
 
       if (response.status === 'ok') {
@@ -158,6 +204,7 @@ export default function Users() {
         setSelectedUser(null);
         resetEditForm();
         fetchUsers();
+        fetchGroupMemberships();
       } else {
         toast.error(response.errorMessage || 'Failed to update user');
       }
@@ -173,6 +220,7 @@ export default function Users() {
       if (response.status === 'ok') {
         toast.success('User deleted successfully');
         fetchUsers();
+        fetchGroupMemberships();
       } else {
         toast.error('Failed to delete user');
       }
@@ -184,14 +232,44 @@ export default function Users() {
     }
   };
 
-  const openEditDialog = (user: User) => {
+  const openEditDialog = async (user: User) => {
     setSelectedUser(user);
     setEditDisplayName(user.displayName);
     setEditUsername(user.username);
     setEditPassword('');
     setEditPasswordConfirm('');
     setEditDisabled(user.disabled);
+    // Pre-populate from cache so Save is safe immediately
+    setEditMemberOfGroups(userGroupsMap[user.username] || []);
     setEditUserOpen(true);
+
+    // Fetch authoritative user details and refine group memberships
+    try {
+      const details = await getUserDetails(user.username, true);
+      if (details.status === 'ok' && details.response) {
+        setEditMemberOfGroups(details.response.memberOfGroups || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch user details:', error);
+    }
+
+    // Ensure groups list is loaded
+    if (allGroups.length === 0) {
+      try {
+        const groupsResponse = await listGroups();
+        if (groupsResponse.status === 'ok' && groupsResponse.response) {
+          setAllGroups(groupsResponse.response.groups || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch groups:', error);
+      }
+    }
+  };
+
+  const toggleGroup = (groupName: string) => {
+    setEditMemberOfGroups((prev) =>
+      prev.includes(groupName) ? prev.filter((g) => g !== groupName) : [...prev, groupName]
+    );
   };
 
   const resetAddForm = () => {
@@ -207,6 +285,7 @@ export default function Users() {
     setEditPassword('');
     setEditPasswordConfirm('');
     setEditDisabled(false);
+    setEditMemberOfGroups([]);
   };
 
   if (loading) {
@@ -225,7 +304,7 @@ export default function Users() {
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold">Users</h2>
               {users.length > 0 && (
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm text-muted-foreground hidden md:inline">
                   Total Users: {users.length}
                 </span>
               )}
@@ -241,65 +320,125 @@ export default function Users() {
               <p className="font-medium">No users found</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Username</TableHead>
-                    <TableHead>Display Name</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Last Seen</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((user) => (
-                    <TableRow
-                      key={user.username}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => openEditDialog(user)}
-                    >
-                      <TableCell className="font-medium font-mono">{user.username}</TableCell>
-                      <TableCell>{user.displayName}</TableCell>
-                      <TableCell>
-                        <span
-                          className={
+            <>
+              {/* Mobile card layout */}
+              <div className="md:hidden divide-y">
+                {users.map((user) => (
+                  <button
+                    key={user.username}
+                    className="w-full text-left p-4 hover:bg-muted/50 flex items-center gap-3"
+                    onClick={() => openEditDialog(user)}
+                  >
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium font-mono text-sm">{user.username}</span>
+                        <Badge
+                          variant="secondary"
+                          className={`text-[10px] ${
                             user.disabled
-                              ? 'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/10 text-red-600 dark:text-red-400'
-                              : 'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-600 dark:text-green-400'
-                          }
+                              ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-0'
+                              : 'bg-green-500/10 text-green-600 dark:text-green-400 border-0'
+                          }`}
                         >
                           {user.disabled ? 'Disabled' : 'Active'}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {user.recentSessionLoggedOn && user.recentSessionLoggedOn !== '0001-01-01T00:00:00' ? (
-                          <div className="space-y-1">
-                            <div className="text-sm">
-                              {new Date(user.recentSessionLoggedOn).toLocaleString([], {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              from <CopyableText text={user.recentSessionRemoteAddress} showIcon={false} className="font-mono" />
-                            </div>
-                          </div>
+                        </Badge>
+                      </div>
+                      {user.displayName && (
+                        <div className="text-sm text-muted-foreground">{user.displayName}</div>
+                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {(userGroupsMap[user.username] || []).length > 0 ? (
+                          userGroupsMap[user.username].map((groupName) => (
+                            <Badge key={groupName} variant="secondary" className="text-[10px]">
+                              {groupName}
+                            </Badge>
+                          ))
                         ) : (
-                          <span className="text-sm text-muted-foreground">Never</span>
+                          <span className="text-xs text-muted-foreground">No groups</span>
                         )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      </TableCell>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </button>
+                ))}
+              </div>
+
+              {/* Desktop table layout */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Username</TableHead>
+                      <TableHead>Display Name</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Groups</TableHead>
+                      <TableHead>Last Seen</TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((user) => (
+                      <TableRow
+                        key={user.username}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => openEditDialog(user)}
+                      >
+                        <TableCell className="font-medium font-mono">{user.username}</TableCell>
+                        <TableCell>{user.displayName}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="secondary"
+                            className={
+                              user.disabled
+                                ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-0'
+                                : 'bg-green-500/10 text-green-600 dark:text-green-400 border-0'
+                            }
+                          >
+                            {user.disabled ? 'Disabled' : 'Active'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {(userGroupsMap[user.username] || []).length > 0 ? (
+                              userGroupsMap[user.username].map((groupName) => (
+                                <Badge key={groupName} variant="secondary" className="text-xs">
+                                  {groupName}
+                                </Badge>
+                              ))
+                            ) : (
+                              <span className="text-sm text-muted-foreground">None</span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {user.recentSessionLoggedOn && user.recentSessionLoggedOn !== '0001-01-01T00:00:00' ? (
+                            <div className="space-y-1">
+                              <div className="text-sm">
+                                {new Date(user.recentSessionLoggedOn).toLocaleString([], {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                from <CopyableText text={user.recentSessionRemoteAddress} showIcon={false} className="font-mono" />
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Never</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -373,7 +512,7 @@ export default function Users() {
           resetEditForm();
         }
       }}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
             <DialogDescription>Update user account details</DialogDescription>
@@ -427,6 +566,44 @@ export default function Users() {
               <Label htmlFor="editDisabled" className="cursor-pointer">
                 Disabled
               </Label>
+            </div>
+
+            {/* Group Membership */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Group Membership</Label>
+                {editMemberOfGroups.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {editMemberOfGroups.length} group{editMemberOfGroups.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              <div className="border rounded-md p-4 max-h-48 overflow-y-auto space-y-2">
+                {allGroups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No groups available</p>
+                ) : (
+                  allGroups.map((group) => (
+                    <div key={group.name} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`group-${group.name}`}
+                        checked={editMemberOfGroups.includes(group.name)}
+                        onCheckedChange={() => toggleGroup(group.name)}
+                      />
+                      <Label
+                        htmlFor={`group-${group.name}`}
+                        className="cursor-pointer flex-1 font-normal"
+                      >
+                        <span className="font-medium">{group.name}</span>
+                        {group.description && (
+                          <span className="text-sm text-muted-foreground ml-2">
+                            ({group.description})
+                          </span>
+                        )}
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
 

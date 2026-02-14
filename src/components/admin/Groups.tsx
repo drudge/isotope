@@ -3,6 +3,7 @@ import { Trash2, Plus, ChevronRight } from 'lucide-react';
 import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Table,
   TableBody,
@@ -44,7 +45,11 @@ import { listUsers, type User } from '@/api/users';
 import { toast } from 'sonner';
 import { Checkbox } from '@/components/ui/checkbox';
 
-export default function Groups() {
+interface GroupsProps {
+  onDataLoaded?: (count: number) => void;
+}
+
+export default function Groups({ onDataLoaded }: GroupsProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +57,9 @@ export default function Groups() {
   const [addGroupOpen, setAddGroupOpen] = useState(false);
   const [editGroupOpen, setEditGroupOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+
+  // Member counts for table display
+  const [groupMembersMap, setGroupMembersMap] = useState<Record<string, string[]>>({});
 
   // Add group form
   const [newName, setNewName] = useState('');
@@ -61,13 +69,30 @@ export default function Groups() {
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editMembers, setEditMembers] = useState<string[]>([]);
+  const [memberFilter, setMemberFilter] = useState('');
 
   const fetchGroups = async () => {
     setLoading(true);
     try {
       const response = await listGroups();
       if (response.status === 'ok' && response.response) {
-        setGroups(response.response.groups || []);
+        const groupList = response.response.groups || [];
+        setGroups(groupList);
+        onDataLoaded?.(groupList.length);
+
+        // Fetch member details for all groups
+        const map: Record<string, string[]> = {};
+        await Promise.all(
+          groupList.map(async (group) => {
+            const details = await getGroupDetails(group.name, true);
+            if (details.status === 'ok' && details.response?.members) {
+              map[group.name] = details.response.members;
+            } else {
+              map[group.name] = [];
+            }
+          })
+        );
+        setGroupMembersMap(map);
       } else {
         toast.error('Failed to load groups');
       }
@@ -187,6 +212,7 @@ export default function Groups() {
         setEditName(details.name);
         setEditDescription(details.description);
         setEditMembers(details.members || []);
+        setMemberFilter('');
         setEditGroupOpen(true);
       } else {
         toast.error('Failed to load group details');
@@ -206,6 +232,7 @@ export default function Groups() {
     setEditName('');
     setEditDescription('');
     setEditMembers([]);
+    setMemberFilter('');
   };
 
   const toggleMember = (username: string) => {
@@ -213,6 +240,12 @@ export default function Groups() {
       prev.includes(username) ? prev.filter((u) => u !== username) : [...prev, username]
     );
   };
+
+  const filteredUsers = users.filter(
+    (u) =>
+      u.username.toLowerCase().includes(memberFilter.toLowerCase()) ||
+      u.displayName.toLowerCase().includes(memberFilter.toLowerCase())
+  );
 
   if (loading) {
     return (
@@ -230,7 +263,7 @@ export default function Groups() {
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold">Groups</h2>
               {groups.length > 0 && (
-                <span className="text-sm text-muted-foreground">Total Groups: {groups.length}</span>
+                <span className="text-sm text-muted-foreground hidden md:inline">Total Groups: {groups.length}</span>
               )}
             </div>
             <Button onClick={() => setAddGroupOpen(true)} size="sm" className="gap-2">
@@ -244,32 +277,73 @@ export default function Groups() {
               <p className="font-medium">No groups found</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {groups.map((group) => (
-                    <TableRow
-                      key={group.name}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => openEditDialog(group)}
-                    >
-                      <TableCell className="font-medium">{group.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{group.description}</TableCell>
-                      <TableCell className="text-right">
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      </TableCell>
+            <>
+              {/* Mobile card layout */}
+              <div className="md:hidden divide-y">
+                {groups.map((group) => (
+                  <button
+                    key={group.name}
+                    className="w-full text-left p-4 hover:bg-muted/50 flex items-center gap-3"
+                    onClick={() => openEditDialog(group)}
+                  >
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">{group.name}</span>
+                        <Badge variant="outline" className="text-[10px]">
+                          {(groupMembersMap[group.name] || []).length} member{(groupMembersMap[group.name] || []).length !== 1 ? 's' : ''}
+                        </Badge>
+                      </div>
+                      {group.description && (
+                        <div className="text-sm text-muted-foreground truncate">{group.description}</div>
+                      )}
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </button>
+                ))}
+              </div>
+
+              {/* Desktop table layout */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Members</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {groups.map((group) => (
+                      <TableRow
+                        key={group.name}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => openEditDialog(group)}
+                      >
+                        <TableCell className="font-medium">{group.name}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs">
+                              {(groupMembersMap[group.name] || []).length} member{(groupMembersMap[group.name] || []).length !== 1 ? 's' : ''}
+                            </Badge>
+                            {(groupMembersMap[group.name] || []).length > 0 && (
+                              <span className="text-sm text-muted-foreground truncate max-w-[200px]">
+                                {(groupMembersMap[group.name] || []).slice(0, 3).join(', ')}
+                                {(groupMembersMap[group.name] || []).length > 3 && ', ...'}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{group.description}</TableCell>
+                        <TableCell className="text-right">
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -349,12 +423,25 @@ export default function Groups() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Members</Label>
+              <div className="flex items-center justify-between">
+                <Label>Members</Label>
+                <span className="text-xs text-muted-foreground">
+                  {editMembers.length} selected
+                </span>
+              </div>
+              <Input
+                placeholder="Filter users..."
+                value={memberFilter}
+                onChange={(e) => setMemberFilter(e.target.value)}
+                className="h-8"
+              />
               <div className="border rounded-md p-4 max-h-60 overflow-y-auto space-y-2">
-                {users.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No users available</p>
+                {filteredUsers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    {users.length === 0 ? 'No users available' : 'No users match filter'}
+                  </p>
                 ) : (
-                  users.map((user) => (
+                  filteredUsers.map((user) => (
                     <div key={user.username} className="flex items-center space-x-2">
                       <Checkbox
                         id={`member-${user.username}`}

@@ -56,7 +56,7 @@ export async function setPermissions(params: {
   groupPermissions?: string;
 }): Promise<ApiResponse<Permission>> {
   const apiParams: Record<string, string> = { section: params.section };
-  if (params.userPermissions) apiParams.userPermissions = params.userPermissions;
-  if (params.groupPermissions) apiParams.groupPermissions = params.groupPermissions;
+  if (params.userPermissions !== undefined) apiParams.userPermissions = params.userPermissions;
+  if (params.groupPermissions !== undefined) apiParams.groupPermissions = params.groupPermissions;
   return apiClient.get('/admin/permissions/set', apiParams);
 }
