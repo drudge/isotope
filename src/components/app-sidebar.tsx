@@ -8,7 +8,7 @@ import {
   ShieldCheck,
   ShieldX,
   ScrollText,
-  AppWindow,
+  Blocks,
   Network,
   Users,
   Waypoints,
@@ -46,7 +46,7 @@ const mainNavItems: NavItem[] = [
   { title: "Cache", url: "/cache", icon: Database },
   { title: "Allowed", url: "/blocked?tab=allowed", icon: ShieldCheck },
   { title: "Blocked", url: "/blocked", icon: ShieldX },
-  { title: "Apps", url: "/apps", icon: AppWindow },
+  { title: "Apps", url: "/apps", icon: Blocks },
   { title: "DNS Client", url: "/dns-client", icon: Network },
   { title: "Logs", url: "/logs", icon: ScrollText },
 ];
