@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Download,
   Trash2,
@@ -10,6 +10,7 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeft,
+  ChevronsUpDown,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Popover,
+  PopoverClose,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   listLogs,
   downloadLog,
@@ -163,14 +170,6 @@ export default function ServerLogs() {
     setSearchTerm("");
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   const toggleStack = (index: number) => {
     setExpandedStacks((prev) => {
       const next = new Set(prev);
@@ -182,11 +181,6 @@ export default function ServerLogs() {
       return next;
     });
   };
-
-  const filteredLogLines = logContent.split("\n").filter((line) => {
-    if (!searchTerm) return true;
-    return line.toLowerCase().includes(searchTerm.toLowerCase());
-  });
 
   // Group log lines, combining errors with their stack traces
   type LogEntry = {
@@ -250,6 +244,27 @@ export default function ServerLogs() {
 
     return entries;
   };
+
+  const logLines = useMemo(() => logContent.split("\n"), [logContent]);
+
+  const filteredLogLines = useMemo(() => {
+    if (!searchTerm) return logLines;
+    const term = searchTerm.toLowerCase();
+    return logLines.filter((line) => line.toLowerCase().includes(term));
+  }, [logLines, searchTerm]);
+
+  const parsedEntries = useMemo(
+    () => parseLogEntries(searchTerm ? filteredLogLines : logLines),
+    [searchTerm, filteredLogLines, logLines],
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const renderLogEntry = (entry: LogEntry, index: number) => {
     if (entry.timestamp) {
@@ -445,11 +460,50 @@ export default function ServerLogs() {
                     <PanelLeftClose className="h-4 w-4" />
                   )}
                 </Button>
-                <FileText className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block" />
-                <span className="font-mono text-sm font-medium truncate flex-1">
-                  {viewingLog}.log
-                </span>
+                {isExpanded ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className="flex items-center gap-1.5 font-mono text-sm font-medium truncate flex-1 min-w-0 hover:bg-muted/50 rounded-md px-1.5 py-0.5 -ml-1.5 transition-colors text-left">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block" />
+                        <span className="truncate">{viewingLog}.log</span>
+                        <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="max-h-64 overflow-y-auto w-72 p-1">
+                      {logs.map((log) => (
+                        <PopoverClose
+                          key={log.fileName}
+                          asChild
+                        >
+                          <button
+                            onClick={() => handleView(log.fileName)}
+                            className={`flex items-center gap-2 w-full rounded-sm px-2 py-1.5 text-sm text-left transition-colors hover:bg-accent hover:text-accent-foreground ${viewingLog === log.fileName ? "bg-muted" : ""}`}
+                          >
+                            <span className="font-mono text-sm">{log.fileName}.log</span>
+                            <span className="ml-auto text-xs text-muted-foreground pl-4 tabular-nums">{log.size}</span>
+                          </button>
+                        </PopoverClose>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block" />
+                    <span className="font-mono text-sm font-medium truncate flex-1">
+                      {viewingLog}.log
+                    </span>
+                  </>
+                )}
                 <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeleteConfirm(viewingLog)}
+                    className="h-8 shrink-0 text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Delete</span>
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -476,16 +530,14 @@ export default function ServerLogs() {
               </div>
 
               {/* Log Content */}
-              <div className="flex-1 overflow-auto min-h-0 bg-muted/30">
+              <div className="flex-1 overflow-auto min-h-0 bg-muted/30" style={{ contain: "strict", contentVisibility: "auto" }}>
                 {loadingContent ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : (
                   <div className="p-3 text-xs font-mono leading-relaxed">
-                    {parseLogEntries(
-                      searchTerm ? filteredLogLines : logContent.split("\n"),
-                    ).map((entry, index) => renderLogEntry(entry, index))}
+                    {parsedEntries.map((entry, index) => renderLogEntry(entry, index))}
                   </div>
                 )}
               </div>
@@ -494,7 +546,7 @@ export default function ServerLogs() {
               {searchTerm && (
                 <div className="px-3 py-1.5 border-t bg-background shrink-0">
                   <span className="text-xs text-muted-foreground">
-                    {filteredLogLines.length} of {logContent.split("\n").length}{" "}
+                    {filteredLogLines.length} of {logLines.length}{" "}
                     lines
                   </span>
                 </div>
