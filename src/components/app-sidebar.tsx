@@ -11,7 +11,7 @@ import {
   Blocks,
   Network,
   Users,
-  Waypoints,
+  ToolCase,
   Info,
   type LucideIcon,
 } from "lucide-react";
@@ -47,7 +47,7 @@ const mainNavItems: NavItem[] = [
   { title: "Allowed", url: "/blocked?tab=allowed", icon: ShieldCheck },
   { title: "Blocked", url: "/blocked", icon: ShieldX },
   { title: "Apps", url: "/apps", icon: Blocks },
-  { title: "DNS Client", url: "/dns-client", icon: Network },
+  { title: "DNS Client", url: "/dns-client", icon: ToolCase },
   { title: "Logs", url: "/logs", icon: ScrollText },
 ];
 
@@ -55,7 +55,7 @@ const systemNavItems: NavItem[] = [
   { title: "Settings", url: "/settings", icon: Settings },
   { title: "DHCP", url: "/dhcp", icon: Server },
   { title: "Administration", url: "/administration", icon: Users },
-  { title: "Cluster", url: "/cluster", icon: Waypoints },
+  { title: "Cluster", url: "/cluster", icon: Network },
   { title: "About", url: "/about", icon: Info },
 ];
 
