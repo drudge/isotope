@@ -1,7 +1,7 @@
 {
   "name": "isotope",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A modern web UI for Technitium DNS Server",
   "type": "module",
   "scripts": {
