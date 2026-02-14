@@ -90,6 +90,11 @@ export interface DnsApp {
   classPath: string;
   description: string;
   isAppRecordRequestHandler: boolean;
+  isRequestController: boolean;
+  isAuthoritativeRequestHandler: boolean;
+  isRequestBlockingHandler: boolean;
+  isQueryLogger: boolean;
+  isPostProcessor: boolean;
 }
 
 export interface InstalledApp {
@@ -108,6 +113,9 @@ export interface StoreApp {
   description: string;
   url: string;
   size: string;
+  installed?: boolean;
+  installedVersion?: string;
+  updateAvailable?: boolean;
 }
 
 export interface StoreAppsListResponse {
