@@ -270,10 +270,10 @@ export default function DnsClient() {
                       <span className="font-mono text-xs text-muted-foreground shrink-0 pt-px">
                         {key}
                       </span>
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0 flex-1 overflow-hidden">
                         <CopyableText
                           text={formatSvcParamValue(key, String(value))}
-                          className="font-mono text-sm text-muted-foreground"
+                          className="font-mono text-sm text-muted-foreground max-w-full"
                         />
                       </div>
                     </div>
