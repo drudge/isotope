@@ -588,12 +588,12 @@ export default function Cluster() {
                     Set up clustering to enable high availability and automatic configuration sync
                     across multiple DNS servers.
                   </p>
-                  <div className="flex items-center justify-center gap-3">
-                    <Button onClick={() => setInitDialogOpen(true)}>
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <Button onClick={() => setInitDialogOpen(true)} className="w-full sm:w-auto">
                       <Plus className="h-4 w-4 mr-2" />
                       Initialize New Cluster
                     </Button>
-                    <Button variant="outline" onClick={() => setJoinDialogOpen(true)}>
+                    <Button variant="outline" onClick={() => setJoinDialogOpen(true)} className="w-full sm:w-auto">
                       <Link className="h-4 w-4 mr-2" />
                       Join Existing Cluster
                     </Button>
