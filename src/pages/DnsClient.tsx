@@ -266,14 +266,16 @@ export default function DnsClient() {
                 </span>
                 <div className="rounded-md border divide-y">
                   {Object.entries(svcParams).map(([key, value]) => (
-                    <div key={key} className="flex items-start gap-3 px-3 py-1.5">
+                    <div key={key} className="flex items-start gap-3 px-3 py-1.5 min-w-0">
                       <span className="font-mono text-xs text-muted-foreground shrink-0 pt-px">
                         {key}
                       </span>
-                      <CopyableText
-                        text={formatSvcParamValue(key, String(value))}
-                        className="font-mono text-sm text-muted-foreground break-all"
-                      />
+                      <div className="min-w-0 flex-1">
+                        <CopyableText
+                          text={formatSvcParamValue(key, String(value))}
+                          className="font-mono text-sm text-muted-foreground"
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
