@@ -224,13 +224,14 @@ export default function DnsClient() {
         <div className="lg:col-span-2 space-y-6">
           {/* Query Form */}
           <Card className="border-2">
-            <CardContent className="pt-6 space-y-3">
-              {/* Row 1: Domain + Type + Resolve */}
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                <div className="relative flex-1">
+            <CardContent className="pt-6">
+              {/* Mobile form layout */}
+              <div className="space-y-4 sm:hidden">
+                {/* Domain input */}
+                <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    id="domain"
+                    id="domain-mobile"
                     placeholder="Domain name"
                     value={domain}
                     onChange={(e) => setDomain(e.target.value)}
@@ -248,9 +249,123 @@ export default function DnsClient() {
                     </button>
                   )}
                 </div>
-                <div className="flex gap-2 sm:gap-3">
+
+                {/* Type + Resolve */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="type-mobile" className="text-xs text-muted-foreground">Record Type</Label>
+                    <Select value={recordType} onValueChange={setRecordType}>
+                      <SelectTrigger id="type-mobile" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RECORD_TYPES.map((type) => (
+                          <SelectItem key={type} value={type}>{type}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground invisible" aria-hidden>Action</Label>
+                    <Button onClick={() => handleQuery()} disabled={isQuerying} className="w-full">
+                      {isQuerying ? (
+                        <IsotopeSpinner size="sm" className="mr-2" />
+                      ) : (
+                        <Search className="h-4 w-4 mr-2" />
+                      )}
+                      {isQuerying ? 'Resolving...' : 'Resolve'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Separator */}
+                <div className="border-t" />
+
+                {/* Server */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="server-mobile" className="text-xs text-muted-foreground">Server</Label>
+                  <Select value={server} onValueChange={setServer}>
+                    <SelectTrigger id="server-mobile" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRESET_SERVERS.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Protocol + EDNS */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="protocol-mobile" className="text-xs text-muted-foreground">Protocol</Label>
+                    <Select value={protocol} onValueChange={(v: typeof protocol) => setProtocol(v)}>
+                      <SelectTrigger id="protocol-mobile" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Udp">UDP</SelectItem>
+                        <SelectItem value="Tcp">TCP</SelectItem>
+                        <SelectItem value="Tls">TLS</SelectItem>
+                        <SelectItem value="Https">HTTPS</SelectItem>
+                        <SelectItem value="Quic">QUIC</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="edns-mobile" className="text-xs text-muted-foreground">EDNS Subnet</Label>
+                    <Input
+                      id="edns-mobile"
+                      placeholder="e.g. 1.2.3.4/24"
+                      value={ednsSubnet}
+                      onChange={(e) => setEdnsSubnet(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* DNSSEC */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="dnssec-mobile"
+                    checked={dnssec}
+                    onCheckedChange={(checked) => setDnssec(checked === true)}
+                  />
+                  <Label htmlFor="dnssec-mobile" className="text-sm font-normal cursor-pointer">
+                    Enable DNSSEC validation
+                  </Label>
+                </div>
+              </div>
+
+              {/* Desktop form layout */}
+              <div className="hidden sm:block space-y-3">
+                {/* Domain + Type + Resolve */}
+                <div className="flex gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="domain"
+                      placeholder="Domain name"
+                      value={domain}
+                      onChange={(e) => setDomain(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleQuery()}
+                      className={`pl-9 ${domain ? 'pr-8' : ''}`}
+                    />
+                    {domain && (
+                      <button
+                        type="button"
+                        onClick={() => { setDomain(''); handleClear(); }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                        title="Clear"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                   <Select value={recordType} onValueChange={setRecordType}>
-                    <SelectTrigger className="w-24 shrink-0">
+                    <SelectTrigger className="w-28 shrink-0">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -261,57 +376,57 @@ export default function DnsClient() {
                   </Select>
                   <Button onClick={() => handleQuery()} disabled={isQuerying} className="shrink-0">
                     {isQuerying ? (
-                      <IsotopeSpinner size="sm" className="sm:mr-2" />
+                      <IsotopeSpinner size="sm" className="mr-2" />
                     ) : (
-                      <Search className="h-4 w-4 sm:mr-2" />
+                      <Search className="h-4 w-4 mr-2" />
                     )}
-                    <span className="hidden sm:inline">{isQuerying ? 'Resolving...' : 'Resolve'}</span>
+                    {isQuerying ? 'Resolving...' : 'Resolve'}
                   </Button>
                 </div>
-              </div>
 
-              {/* Row 2: Server + Protocol + EDNS + DNSSEC */}
-              <div className="flex gap-2 sm:gap-3 items-center flex-wrap">
-                <Select value={server} onValueChange={setServer}>
-                  <SelectTrigger className="w-44">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PRESET_SERVERS.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={protocol} onValueChange={(v: typeof protocol) => setProtocol(v)}>
-                  <SelectTrigger className="w-24">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Udp">UDP</SelectItem>
-                    <SelectItem value="Tcp">TCP</SelectItem>
-                    <SelectItem value="Tls">TLS</SelectItem>
-                    <SelectItem value="Https">HTTPS</SelectItem>
-                    <SelectItem value="Quic">QUIC</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  id="edns"
-                  placeholder="EDNS subnet"
-                  value={ednsSubnet}
-                  onChange={(e) => setEdnsSubnet(e.target.value)}
-                  className="w-36"
-                />
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="dnssec"
-                    checked={dnssec}
-                    onCheckedChange={(checked) => setDnssec(checked === true)}
+                {/* Server + Protocol + EDNS + DNSSEC */}
+                <div className="flex gap-3 items-center flex-wrap">
+                  <Select value={server} onValueChange={setServer}>
+                    <SelectTrigger className="w-44">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PRESET_SERVERS.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={protocol} onValueChange={(v: typeof protocol) => setProtocol(v)}>
+                    <SelectTrigger className="w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Udp">UDP</SelectItem>
+                      <SelectItem value="Tcp">TCP</SelectItem>
+                      <SelectItem value="Tls">TLS</SelectItem>
+                      <SelectItem value="Https">HTTPS</SelectItem>
+                      <SelectItem value="Quic">QUIC</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    id="edns"
+                    placeholder="EDNS subnet"
+                    value={ednsSubnet}
+                    onChange={(e) => setEdnsSubnet(e.target.value)}
+                    className="w-36"
                   />
-                  <Label htmlFor="dnssec" className="text-sm font-normal cursor-pointer whitespace-nowrap">
-                    DNSSEC
-                  </Label>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="dnssec"
+                      checked={dnssec}
+                      onCheckedChange={(checked) => setDnssec(checked === true)}
+                    />
+                    <Label htmlFor="dnssec" className="text-sm font-normal cursor-pointer whitespace-nowrap">
+                      DNSSEC
+                    </Label>
+                  </div>
                 </div>
               </div>
 
