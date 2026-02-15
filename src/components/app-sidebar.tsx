@@ -32,6 +32,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 interface NavItem {
@@ -62,6 +63,7 @@ const systemNavItems: NavItem[] = [
 function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
   const location = useLocation();
   const fullPath = location.pathname + location.search;
+  const { setOpenMobile, isMobile } = useSidebar();
 
   return (
     <SidebarGroup>
@@ -81,7 +83,7 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
                   isActive={isActive}
                   tooltip={item.title}
                 >
-                  <Link to={item.url}>
+                  <Link to={item.url} onClick={() => isMobile && setOpenMobile(false)}>
                     <item.icon />
                     <span>{item.title}</span>
                   </Link>
@@ -98,6 +100,7 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user, logout } = useAuth();
   const { data: serverInfo } = useApi(() => getServerInfo(), []);
+  const { setOpenMobile, isMobile } = useSidebar();
 
   const userData = {
     name: user?.displayName || user?.username || "User",
@@ -112,7 +115,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <div className="flex items-center gap-2">
               <SidebarMenuButton size="lg" asChild className="flex-1" tooltip={serverInfo?.version ? `Isotope — Technitium DNS v${serverInfo.version}` : "Isotope"}>
-                <Link to="/">
+                <Link to="/" onClick={() => isMobile && setOpenMobile(false)}>
                   <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                     <svg
                       viewBox="0 0 512 512"
