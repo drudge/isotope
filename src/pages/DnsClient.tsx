@@ -118,6 +118,13 @@ export default function DnsClient() {
     }
   };
 
+  const formatSvcParamValue = (key: string, value: string): string => {
+    if (['alpn', 'ipv4hint', 'ipv6hint', 'mandatory'].includes(key)) {
+      return value.split(',').map(v => v.trim()).join(', ');
+    }
+    return value;
+  };
+
   const formatRData = (record: { Name: string; Type: string; Class: string; TTL: number; RDLENGTH: number; RDATA: Record<string, unknown> }): string => {
     const rdata = record.RDATA;
 
@@ -135,6 +142,35 @@ export default function DnsClient() {
         return (rdata.Text as string) || '';
       case 'SOA':
         return `${rdata.PrimaryNameServer || ''} ${rdata.ResponsiblePerson || ''}`;
+      case 'SRV':
+        return `${rdata.Priority || 0} ${rdata.Weight || 0} ${rdata.Port || 0} ${rdata.Target || ''}`;
+      case 'CAA':
+        return `${rdata.Flags || 0} ${rdata.Tag || ''} "${rdata.Value || ''}"`;
+      case 'DS':
+        return `${rdata.KeyTag || ''} ${rdata.Algorithm || ''} ${rdata.DigestType || ''} ${rdata.Digest || ''}`;
+      case 'DNSKEY': {
+        const pk = String(rdata.PublicKey || '');
+        return `${rdata.Flags || ''} ${rdata.Protocol || ''} ${rdata.Algorithm || ''} ${pk.length > 20 ? pk.substring(0, 20) + '...' : pk}`;
+      }
+      case 'TLSA': {
+        const certData = String(rdata.CertificateAssociationData || '');
+        return `${rdata.CertificateUsage || ''} ${rdata.Selector || ''} ${rdata.MatchingType || ''} ${certData.length > 32 ? certData.substring(0, 32) + '...' : certData}`;
+      }
+      case 'RRSIG':
+        return `${rdata.TypeCovered || ''} ${rdata.Algorithm || ''} ${rdata.Labels || ''} ${rdata.SignersName || ''}`;
+      case 'NSEC':
+        return `${rdata.NextDomainName || ''} ${Array.isArray(rdata.Types) ? (rdata.Types as string[]).join(' ') : rdata.Types || ''}`;
+      case 'NSEC3':
+        return `${rdata.NextHashedOwnerName || ''} ${Array.isArray(rdata.Types) ? (rdata.Types as string[]).join(' ') : rdata.Types || ''}`;
+      case 'HTTPS':
+      case 'SVCB': {
+        const parts = [String(rdata.SvcPriority ?? 0), String(rdata.TargetName || '.')];
+        const params = rdata.SvcParams as Record<string, unknown> | undefined;
+        if (params && Object.keys(params).length > 0) {
+          parts.push(Object.entries(params).map(([k, v]) => `${k}=${v}`).join(' '));
+        }
+        return parts.join(' ');
+      }
       case 'FWD':
         return `${rdata.Protocol ? (rdata.Protocol as string).toUpperCase() : ''}: ${rdata.Forwarder || ''}`;
       case 'OPT': {
@@ -173,7 +209,94 @@ export default function DnsClient() {
     return protocol.toUpperCase();
   };
 
+  const renderHttpsSvcbRecord = (record: { Name: string; Type: string; Class: string; TTL: number; RDLENGTH: number; RDATA: Record<string, unknown> }, idx: number) => {
+    const rdata = record.RDATA;
+    const priority = (rdata.SvcPriority as number) ?? 0;
+    const targetName = (rdata.TargetName as string) || '.';
+    const svcParams = rdata.SvcParams as Record<string, string> | undefined;
+    const isAlias = priority === 0;
+
+    return (
+      <div key={idx} className="px-4 py-3.5 hover:bg-muted/50 transition-colors">
+        <div className="flex items-start gap-3">
+          <Badge variant="outline" className="mt-0.5 w-14 justify-center font-mono text-xs shrink-0 h-6">
+            {record.Type}
+          </Badge>
+
+          <div className="flex-1 min-w-0 space-y-3">
+            {/* Record name */}
+            {record.Name && record.Name !== '.' && (
+              <div>
+                <CopyableText
+                  text={record.Name}
+                  className="font-mono text-sm font-medium break-all"
+                />
+              </div>
+            )}
+
+            {/* Priority + Target */}
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Priority</span>
+                <span className="font-mono text-sm font-medium">{priority}</span>
+                {isAlias && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Alias</Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Target</span>
+                {targetName === '.' || targetName === '' ? (
+                  <span className="font-mono text-sm text-muted-foreground">
+                    . <span className="text-xs italic">(owner)</span>
+                  </span>
+                ) : (
+                  <CopyableText
+                    text={targetName}
+                    className="font-mono text-sm break-all"
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Service Parameters */}
+            {svcParams && Object.keys(svcParams).length > 0 && (
+              <div className="space-y-1.5">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">
+                  Service Parameters
+                </span>
+                <div className="rounded-md border divide-y">
+                  {Object.entries(svcParams).map(([key, value]) => (
+                    <div key={key} className="flex items-start gap-3 px-3 py-1.5 min-w-0">
+                      <span className="font-mono text-xs text-muted-foreground shrink-0 pt-px">
+                        {key}
+                      </span>
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <CopyableText
+                          text={formatSvcParamValue(key, String(value))}
+                          className="font-mono text-sm text-muted-foreground max-w-full"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col items-end gap-0.5 shrink-0 min-w-[80px]">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground/60">TTL</div>
+            <div className="text-sm font-medium tabular-nums">{record.TTL}s</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderRecordRow = (record: { Name: string; Type: string; Class: string; TTL: number; RDLENGTH: number; RDATA: Record<string, unknown> }, idx: number) => {
+    if (record.Type === 'HTTPS' || record.Type === 'SVCB') {
+      return renderHttpsSvcbRecord(record, idx);
+    }
+
     const rdata = formatRData(record);
     return (
       <div key={idx} className="px-4 py-3.5 hover:bg-muted/50 transition-colors">
