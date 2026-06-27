@@ -152,27 +152,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">Isotope</span>
-                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <span className="truncate">
-                        {serverInfo?.version
-                          ? `Technitium v${serverInfo.version}`
-                          : "for Technitium DNS"}
-                      </span>
-                      {isUpdateAvailable && (
-                        <Badge
-                          variant="default"
-                          className="h-3.5 gap-0.5 px-1 py-0 text-[10px] leading-none [&>svg]:size-2.5"
-                          title={
-                            update?.updateVersion
-                              ? `Technitium v${update.updateVersion} available`
-                              : "Server update available"
-                          }
-                        >
-                          <ArrowUpCircle />
-                          Update
-                        </Badge>
-                      )}
+                    <span className="truncate text-xs text-muted-foreground">
+                      {serverInfo?.version
+                        ? `Technitium v${serverInfo.version}`
+                        : "for Technitium DNS"}
                     </span>
+                    {isUpdateAvailable && (
+                      <Badge
+                        variant="default"
+                        className="mt-1 h-4 w-fit gap-1 px-1.5 text-[10px] leading-none [&>svg]:size-2.5"
+                        title={
+                          update?.updateVersion
+                            ? `Technitium v${update.updateVersion} available`
+                            : "Server update available"
+                        }
+                      >
+                        <ArrowUpCircle />
+                        Update available
+                      </Badge>
+                    )}
                   </div>
                 </Link>
               </SidebarMenuButton>
