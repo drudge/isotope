@@ -13,11 +13,14 @@ import {
   Users,
   ToolCase,
   Info,
+  ArrowUpCircle,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useApi } from "@/hooks/useApi";
+import { useUpdateCheck } from "@/hooks/useUpdateCheck";
 import { getServerInfo } from "@/api/dns";
+import { Badge } from "@/components/ui/badge";
 import { NavUser } from "@/components/nav-user";
 import {
   Sidebar,
@@ -100,6 +103,7 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user, logout } = useAuth();
   const { data: serverInfo } = useApi(() => getServerInfo(), []);
+  const { update, isUpdateAvailable } = useUpdateCheck();
   const { setOpenMobile, isMobile } = useSidebar();
 
   const userData = {
@@ -116,7 +120,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <div className="flex items-center gap-2">
               <SidebarMenuButton size="lg" asChild className="flex-1" tooltip={serverInfo?.version ? `Isotope — Technitium DNS v${serverInfo.version}` : "Isotope"}>
                 <Link to="/" onClick={() => isMobile && setOpenMobile(false)}>
-                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <div className="relative flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                     <svg
                       viewBox="0 0 512 512"
                       className="size-4"
@@ -134,6 +138,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       <circle cx="256" cy="256" r="96" />
                       <circle cx="456" cy="256" r="56" />
                     </svg>
+                    {/* Compact update indicator, shown only when the sidebar is collapsed to icons */}
+                    {isUpdateAvailable && (
+                      <span
+                        className="absolute -right-1 -top-1 hidden size-2.5 rounded-full bg-primary ring-2 ring-background group-data-[collapsible=icon]:block"
+                        title={
+                          update?.updateVersion
+                            ? `Technitium v${update.updateVersion} available`
+                            : "Server update available"
+                        }
+                      />
+                    )}
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
                     <span className="truncate font-semibold">Isotope</span>
@@ -142,6 +157,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         ? `Technitium v${serverInfo.version}`
                         : "for Technitium DNS"}
                     </span>
+                    {isUpdateAvailable && (
+                      <Badge
+                        variant="default"
+                        className="mt-1 h-4 w-fit gap-1 px-1.5 text-[10px] leading-none [&>svg]:size-2.5"
+                        title={
+                          update?.updateVersion
+                            ? `Technitium v${update.updateVersion} available`
+                            : "Server update available"
+                        }
+                      >
+                        <ArrowUpCircle />
+                        Update available
+                      </Badge>
+                    )}
                   </div>
                 </Link>
               </SidebarMenuButton>
