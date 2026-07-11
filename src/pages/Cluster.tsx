@@ -88,14 +88,13 @@ function formatDateTime(dateStr?: string): string {
 
 // Node type badge component
 function NodeTypeBadge({ type }: { type: NodeType }) {
+  const styles: Record<NodeType, string> = {
+    Primary: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    Secondary: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
+    Unknown: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
+  };
   return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-        type === 'Primary'
-          ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-          : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
-      }`}
-    >
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles[type]}`}>
       {type}
     </span>
   );
@@ -106,8 +105,8 @@ function NodeStateBadge({ state }: { state: NodeState }) {
   const styles: Record<NodeState, string> = {
     Self: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
     Connected: 'bg-green-500/10 text-green-600 dark:text-green-400',
-    Disconnected: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
     Unreachable: 'bg-red-500/10 text-red-600 dark:text-red-400',
+    Unknown: 'bg-gray-500/10 text-gray-600 dark:text-gray-400',
   };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles[state]}`}>
@@ -183,7 +182,7 @@ export default function Cluster() {
   // Derived state
   const clusterState = clusterData as ClusterState | null;
   const isInitialized = clusterState?.clusterInitialized ?? false;
-  const nodes = useMemo(() => clusterState?.nodes ?? [], [clusterState?.nodes]);
+  const nodes = useMemo(() => clusterState?.clusterNodes ?? [], [clusterState?.clusterNodes]);
   const selfNode = useMemo(() => nodes.find((n) => n.state === 'Self'), [nodes]);
   const isPrimary = selfNode?.type === 'Primary';
   const isSecondary = selfNode?.type === 'Secondary';
@@ -759,8 +758,8 @@ export default function Cluster() {
                         <TableHead>IP Address</TableHead>
                         <TableHead>Type</TableHead>
                         <TableHead>State</TableHead>
+                        <TableHead>Up Since</TableHead>
                         <TableHead>Last Seen</TableHead>
-                        <TableHead>Last Synced</TableHead>
                         {isPrimary && <TableHead className="w-[50px]"></TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -782,8 +781,10 @@ export default function Cluster() {
                           <TableCell>
                             <NodeStateBadge state={node.state} />
                           </TableCell>
-                          <TableCell className="text-sm">{formatDateTime(node.lastSeen)}</TableCell>
-                          <TableCell className="text-sm">{formatDateTime(node.lastSynced)}</TableCell>
+                          <TableCell className="text-sm">{formatDateTime(node.upSince)}</TableCell>
+                          <TableCell className="text-sm">
+                            {node.state === 'Self' ? 'Now' : formatDateTime(node.lastSeen)}
+                          </TableCell>
                           {isPrimary && (
                             <TableCell>
                               {node.type === 'Secondary' && (
@@ -873,7 +874,7 @@ export default function Cluster() {
           </div>
 
           {/* Sync Info (when initialized as secondary) */}
-          {isInitialized && isSecondary && clusterState?.configLastSynced && (
+          {isInitialized && isSecondary && selfNode?.configLastSynced && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Sync Status</CardTitle>
@@ -881,12 +882,12 @@ export default function Cluster() {
               <CardContent className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Last Synced</span>
-                  <span className="font-medium">{formatDateTime(clusterState.configLastSynced)}</span>
+                  <span className="font-medium">{formatDateTime(selfNode.configLastSynced)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Config Refresh</span>
                   <span className="font-medium">
-                    {Math.floor((clusterState.configRefreshIntervalSeconds ?? 900) / 60)} min
+                    {Math.floor((clusterState?.configRefreshIntervalSeconds ?? 900) / 60)} min
                   </span>
                 </div>
               </CardContent>

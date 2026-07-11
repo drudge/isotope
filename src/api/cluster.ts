@@ -50,7 +50,9 @@ export async function joinCluster(
     apiParams.primaryNodeTotp = params.primaryNodeTotp;
   }
 
-  return apiClient.get<ClusterState>('/admin/cluster/initJoin', apiParams);
+  // POST form body: carries the primary node admin's password (docs also
+  // specify POST for this call).
+  return apiClient.postForm<ClusterState>('/admin/cluster/initJoin', apiParams);
 }
 
 // Delete cluster (Primary only)
@@ -144,7 +146,7 @@ export async function updatePrimaryNode(
 export async function updateNodeIpAddresses(
   ipAddresses: string
 ): Promise<ApiResponse<ClusterState>> {
-  return apiClient.get<ClusterState>('/admin/cluster/updateIpAddresses', {
+  return apiClient.get<ClusterState>('/admin/cluster/updateIpAddress', {
     ipAddresses,
   });
 }

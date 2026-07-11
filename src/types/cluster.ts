@@ -1,5 +1,5 @@
-export type NodeType = 'Primary' | 'Secondary';
-export type NodeState = 'Self' | 'Connected' | 'Unreachable' | 'Disconnected';
+export type NodeType = 'Unknown' | 'Primary' | 'Secondary';
+export type NodeState = 'Unknown' | 'Self' | 'Connected' | 'Unreachable';
 
 export interface ClusterNode {
   id: number;
@@ -8,9 +8,11 @@ export interface ClusterNode {
   ipAddresses?: string[];
   type: NodeType;
   state: NodeState;
-  lastSeen: string;
   upSince?: string;
-  lastSynced?: string;
+  // Sent only for remote nodes; the Self node has no lastSeen
+  lastSeen?: string;
+  // Sent only on the Self node when it is a Secondary that has synced
+  configLastSynced?: string;
 }
 
 export interface ClusterState {
@@ -22,8 +24,7 @@ export interface ClusterState {
   heartbeatRetryIntervalSeconds?: number;
   configRefreshIntervalSeconds?: number;
   configRetryIntervalSeconds?: number;
-  configLastSynced?: string;
-  nodes?: ClusterNode[];
+  clusterNodes?: ClusterNode[];
   serverIpAddresses?: string[];
 }
 
