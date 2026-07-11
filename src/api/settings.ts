@@ -426,7 +426,9 @@ export async function updateSettings(
     params.maxStatFileDays = String(settings.maxStatFileDays);
   }
 
-  return apiClient.get<DnsSettings>('/settings/set', params);
+  // POST form body: settings can carry secrets (TSIG keys, TLS cert and proxy
+  // passwords) and large lists that would overflow a URL.
+  return apiClient.postForm<DnsSettings>('/settings/set', params);
 }
 
 // Get TSIG key names

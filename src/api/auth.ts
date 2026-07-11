@@ -5,7 +5,7 @@ export async function login(
   username: string,
   password: string
 ): Promise<ApiResponse<LoginResponse>> {
-  const response = await apiClient.get<LoginResponse>('/user/login', {
+  const response = await apiClient.postForm<LoginResponse>('/user/login', {
     user: username,
     pass: password,
     includeInfo: 'true',
@@ -32,7 +32,7 @@ export async function changePassword(
   currentPassword: string,
   newPassword: string
 ): Promise<ApiResponse<void>> {
-  return apiClient.get<void>('/user/changePassword', {
+  return apiClient.postForm<void>('/user/changePassword', {
     pass: currentPassword,
     newPass: newPassword,
   });
