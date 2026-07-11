@@ -7135,33 +7135,39 @@ RESPONSE:
 		"heartbeatRetryIntervalSeconds": 10,
 		"configRefreshIntervalSeconds": 900,
 		"configRetryIntervalSeconds": 60,
-		"configLastSynced": "2025-09-26T12:30:16Z",
-		"nodes": [
+		"clusterNodes": [
 			{
 				"id": 1342079372,
 				"name": "server1.example.com",
 				"url": "https://server1.example.com:53443/",
-				"ipAddress": "192.168.10.5",
+				"ipAddresses": [
+					"192.168.10.5"
+				],
 				"type": "Secondary",
 				"state": "Self",
-				"lastSeen": "0001-01-01T00:00:00"
+				"upSince": "2025-09-26T10:12:41Z",
+				"configLastSynced": "2025-09-26T12:30:16Z"
 			},
 			{
 				"id": 1653399468,
 				"name": "server2.example.com",
 				"url": "https://server2.example.com:53443/",
-				"ipAddress": "192.168.10.101",
+				"ipAddresses": [
+					"192.168.10.101"
+				],
 				"type": "Secondary",
-				"state": "Unreachable",
-				"lastSeen": "0001-01-01T00:00:00"
+				"state": "Unreachable"
 			},
 			{
 				"id": 1843286864,
 				"name": "server3.example.com",
 				"url": "https://server3.example.com:53443/",
-				"ipAddress": "192.168.10.102",
+				"ipAddresses": [
+					"192.168.10.102"
+				],
 				"type": "Primary",
 				"state": "Connected",
+				"upSince": "2025-09-25T08:00:07Z",
 				"lastSeen": "2025-09-26T12:30:16Z"
 			}
 		],
@@ -7211,7 +7217,7 @@ RESPONSE:
 		"heartbeatRetryIntervalSeconds": 10,
 		"configRefreshIntervalSeconds": 900,
 		"configRetryIntervalSeconds": 60,
-		"nodes": [
+		"clusterNodes": [
 			{
 				"id": 1081800048,
 				"name": "server1.example.com",
@@ -7294,7 +7300,7 @@ RESPONSE:
 		"configRefreshIntervalSeconds": 900,
 		"configRetryIntervalSeconds": 60,
 		"configLastSynced": "2025-09-26T12:30:16Z",
-		"nodes": [
+		"clusterNodes": [
 			{
 				"id": 1342079372,
 				"name": "server1.example.com",
@@ -7352,7 +7358,7 @@ RESPONSE:
 		"heartbeatRetryIntervalSeconds": 10,
 		"configRefreshIntervalSeconds": 900,
 		"configRetryIntervalSeconds": 60,
-		"nodes": [
+		"clusterNodes": [
 			{
 				"id": 1151850285,
 				"name": "server1.example.com",
@@ -7399,7 +7405,7 @@ RESPONSE:
 		"heartbeatRetryIntervalSeconds": 10,
 		"configRefreshIntervalSeconds": 900,
 		"configRetryIntervalSeconds": 60,
-		"nodes": [
+		"clusterNodes": [
 			{
 				"id": 1151850285,
 				"name": "server1.example.com",
@@ -7450,7 +7456,7 @@ RESPONSE:
 		"configRefreshIntervalSeconds": 900,
 		"configRetryIntervalSeconds": 60,
 		"configLastSynced": "2025-09-26T12:30:16Z",
-		"nodes": [
+		"clusterNodes": [
 			{
 				"id": 1342079372,
 				"name": "server1.example.com",
@@ -7535,7 +7541,7 @@ RESPONSE:
 		"configRefreshIntervalSeconds": 900,
 		"configRetryIntervalSeconds": 60,
 		"configLastSynced": "2025-09-26T12:30:16Z",
-		"nodes": [
+		"clusterNodes": [
 			{
 				"id": 1342079372,
 				"name": "server1.example.com",
@@ -7609,7 +7615,7 @@ RESPONSE:
 		"configRefreshIntervalSeconds": 900,
 		"configRetryIntervalSeconds": 60,
 		"configLastSynced": "2025-09-27T13:19:55Z",
-		"nodes": [
+		"clusterNodes": [
 			{
 				"id": 1151850285,
 				"name": "server1.example.com",
@@ -7752,7 +7758,7 @@ RESPONSE:
 		"configRefreshIntervalSeconds": 900,
 		"configRetryIntervalSeconds": 60,
 		"configLastSynced": "2025-09-27T13:19:55Z",
-		"nodes": [
+		"clusterNodes": [
 			{
 				"id": 1151850285,
 				"name": "server1.example.com",
@@ -7816,7 +7822,7 @@ RESPONSE:
 		"configRefreshIntervalSeconds": 900,
 		"configRetryIntervalSeconds": 60,
 		"configLastSynced": "2025-09-27T13:19:55Z",
-		"nodes": [
+		"clusterNodes": [
 			{
 				"id": 811905692,
 				"name": "server2.example.com",
@@ -7865,7 +7871,7 @@ RESPONSE:
 		"configRefreshIntervalSeconds": 900,
 		"configRetryIntervalSeconds": 60,
 		"configLastSynced": "2025-09-27T13:19:55Z",
-		"nodes": [
+		"clusterNodes": [
 			{
 				"id": 811905692,
 				"name": "server2.example.com",

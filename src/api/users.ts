@@ -30,16 +30,16 @@ export async function createUser(params: {
   password: string;
   displayName?: string;
 }): Promise<ApiResponse<User>> {
-  const queryParams = new URLSearchParams({
+  const form: Record<string, string> = {
     user: params.username,
     pass: params.password,
-  });
+  };
 
   if (params.displayName) {
-    queryParams.append('displayName', params.displayName);
+    form.displayName = params.displayName;
   }
 
-  return apiClient.get<User>(`/admin/users/create?${queryParams.toString()}`);
+  return apiClient.postForm<User>('/admin/users/create', form);
 }
 
 export async function getUserDetails(username: string, includeGroups = false): Promise<ApiResponse<UserDetails>> {
@@ -55,30 +55,30 @@ export async function setUserDetails(params: {
   newPassword?: string;
   memberOfGroups?: string[];
 }): Promise<ApiResponse<UserDetails>> {
-  const queryParams = new URLSearchParams({
+  const form: Record<string, string> = {
     user: params.username,
-  });
+  };
 
   if (params.displayName !== undefined) {
-    queryParams.append('displayName', params.displayName);
+    form.displayName = params.displayName;
   }
   if (params.newUsername) {
-    queryParams.append('newUser', params.newUsername);
+    form.newUser = params.newUsername;
   }
   if (params.disabled !== undefined) {
-    queryParams.append('disabled', params.disabled.toString());
+    form.disabled = params.disabled.toString();
   }
   if (params.sessionTimeoutSeconds !== undefined) {
-    queryParams.append('sessionTimeoutSeconds', params.sessionTimeoutSeconds.toString());
+    form.sessionTimeoutSeconds = params.sessionTimeoutSeconds.toString();
   }
   if (params.newPassword) {
-    queryParams.append('newPass', params.newPassword);
+    form.newPass = params.newPassword;
   }
   if (params.memberOfGroups) {
-    queryParams.append('memberOfGroups', params.memberOfGroups.join(','));
+    form.memberOfGroups = params.memberOfGroups.join(',');
   }
 
-  return apiClient.get<UserDetails>(`/admin/users/set?${queryParams.toString()}`);
+  return apiClient.postForm<UserDetails>('/admin/users/set', form);
 }
 
 export async function deleteUser(username: string): Promise<ApiResponse<Record<string, never>>> {
