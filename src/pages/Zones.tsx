@@ -71,9 +71,8 @@ import {
   getZoneRecords,
   addRecord,
   deleteRecord,
-  listApps,
-  type InstalledApp,
 } from "@/api/dns";
+import { listApps, type InstalledApp } from "@/api/apps";
 import { toast } from "sonner";
 import type { Zone, DnsRecord } from "@/types/api";
 

@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import type { DnsApp, InstalledApp } from '@/api/dns';
+import type { DnsApp, InstalledApp } from '@/api/apps';
 
 const CAPABILITIES = {
   isAppRecordRequestHandler: {
