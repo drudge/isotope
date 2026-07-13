@@ -12,8 +12,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { ConfigFormView } from './ConfigFormView';
-import { getAppConfig } from '@/api/dns';
-import type { InstalledApp } from '@/api/dns';
+import { getAppConfig } from '@/api/apps';
+import type { InstalledApp } from '@/api/apps';
 
 const ConfigRawEditor = lazy(() =>
   import('./ConfigRawEditor').then((m) => ({ default: m.ConfigRawEditor }))

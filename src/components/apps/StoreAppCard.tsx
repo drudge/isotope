@@ -3,7 +3,7 @@ import { Download, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import type { StoreApp } from '@/api/dns';
+import type { StoreApp } from '@/api/apps';
 
 interface StoreAppCardProps {
   app: StoreApp;

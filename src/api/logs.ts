@@ -1,15 +1,6 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '@/types/api';
 
-export interface LogFile {
-  fileName: string;
-  size: string;
-}
-
-export interface LogsListResponse {
-  logFiles: LogFile[];
-}
-
 export interface QueryLogEntry {
   rowNumber: number;
   timestamp: string;
@@ -48,18 +39,6 @@ export interface QueryLogsParams {
   qclass?: string;
 }
 
-export async function listLogs(): Promise<ApiResponse<LogsListResponse>> {
-  return apiClient.get<LogsListResponse>('/logs/list');
-}
-
-export async function deleteLog(fileName: string): Promise<ApiResponse<void>> {
-  return apiClient.get<void>('/logs/delete', { log: fileName });
-}
-
-export async function deleteAllLogs(): Promise<ApiResponse<void>> {
-  return apiClient.get<void>('/logs/deleteAll');
-}
-
 export async function queryLogs(params: QueryLogsParams = {}): Promise<ApiResponse<QueryLogsResponse>> {
   const queryParams: Record<string, string> = {};
 
@@ -80,31 +59,4 @@ export async function queryLogs(params: QueryLogsParams = {}): Promise<ApiRespon
   if (params.qclass) queryParams.qclass = params.qclass;
 
   return apiClient.get<QueryLogsResponse>('/logs/query', queryParams);
-}
-
-export function downloadLogUrl(fileName: string): string {
-  const token = sessionStorage.getItem('technitium_token');
-  return `/api/logs/download?token=${token}&fileName=${encodeURIComponent(fileName)}`;
-}
-
-export async function downloadLog(fileName: string): Promise<string> {
-  const token = sessionStorage.getItem('technitium_token');
-  if (!token) throw new Error('Not authenticated');
-
-  const url = `/api/logs/download?token=${token}&fileName=${encodeURIComponent(fileName)}`;
-
-  const response = await fetch(url);
-  const text = await response.text();
-
-  if (!response.ok) {
-    // Try to parse as JSON error
-    try {
-      const error = JSON.parse(text);
-      throw new Error(error.errorMessage || `HTTP ${response.status}: ${response.statusText}`);
-    } catch {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-  }
-
-  return text;
 }

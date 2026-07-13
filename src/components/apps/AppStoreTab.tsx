@@ -3,7 +3,7 @@ import { Search, Store } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { StoreAppCard } from './StoreAppCard';
-import type { StoreApp } from '@/api/dns';
+import type { StoreApp } from '@/api/apps';
 
 interface AppStoreTabProps {
   apps: StoreApp[];

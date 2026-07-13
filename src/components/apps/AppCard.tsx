@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CapabilityBadges } from './CapabilityBadge';
-import type { InstalledApp, StoreApp } from '@/api/dns';
+import type { InstalledApp, StoreApp } from '@/api/apps';
 
 interface AppCardProps {
   app: InstalledApp;

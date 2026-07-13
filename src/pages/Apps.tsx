@@ -27,7 +27,7 @@ import {
   setAppConfig,
   type InstalledApp,
   type StoreApp,
-} from '@/api/dns';
+} from '@/api/apps';
 import { toast } from 'sonner';
 import { InstalledAppsTab } from '@/components/apps/InstalledAppsTab';
 import { AppStoreTab } from '@/components/apps/AppStoreTab';
