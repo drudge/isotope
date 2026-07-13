@@ -6,13 +6,20 @@ import {
   Search,
   ChevronRight,
   ChevronDown,
+  ChevronLeft,
   ArrowLeft,
+  ArrowLeftRight,
   Trash2,
   RefreshCw,
+  RotateCw,
   Settings2,
   X,
   MoreVertical,
   Power,
+  Download,
+  Upload,
+  Copy,
+  KeyRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,9 +66,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useApi } from "@/hooks/useApi";
+import { Switch } from "@/components/ui/switch";
 import {
   listZones,
   createZone,
@@ -71,8 +80,19 @@ import {
   getZoneRecords,
   addRecord,
   deleteRecord,
+  updateRecord,
+  exportZone,
+  resyncZone,
 } from "@/api/dns";
 import { listApps, type InstalledApp } from "@/api/apps";
+import { saveBlob } from "@/lib/utils";
+import { ZoneOptionsDialog } from "@/components/zones/ZoneOptionsDialog";
+import { ZonePermissionsDialog } from "@/components/zones/ZonePermissionsDialog";
+import {
+  ZoneCloneDialog,
+  ZoneConvertDialog,
+  ZoneImportDialog,
+} from "@/components/zones/ZoneToolsDialogs";
 import { toast } from "sonner";
 import type { Zone, DnsRecord } from "@/types/api";
 
@@ -97,6 +117,87 @@ const recordTypes = [
   "APP",
   "FWD",
 ];
+
+// Zone types that support each management action.
+const RESYNC_TYPES = new Set<Zone["type"]>([
+  "Secondary",
+  "Stub",
+  "SecondaryForwarder",
+  "SecondaryCatalog",
+]);
+const IMPORT_TYPES = new Set<Zone["type"]>(["Primary", "Forwarder"]);
+const CLONE_TYPES = new Set<Zone["type"]>(["Primary", "Forwarder"]);
+const CONVERT_TYPES = new Set<Zone["type"]>([
+  "Primary",
+  "Secondary",
+  "Forwarder",
+]);
+
+// Shared handlers for the zone action menus rendered in both the zones list
+// and the zone detail header.
+interface ZoneActions {
+  onOptions: (zone: Zone) => void;
+  onPermissions: (zone: Zone) => void;
+  onImport: (zone: Zone) => void;
+  onExport: (zone: Zone) => void;
+  onClone: (zone: Zone) => void;
+  onConvert: (zone: Zone) => void;
+  onResync: (zone: Zone) => void;
+}
+
+function ZoneActionMenuItems({
+  zone,
+  actions,
+  compact = false,
+}: {
+  zone: Zone;
+  actions: ZoneActions;
+  compact?: boolean;
+}) {
+  if (zone.internal) return null;
+  return (
+    <>
+      <DropdownMenuItem onClick={() => actions.onOptions(zone)}>
+        <Settings2 className="h-4 w-4 mr-2" />
+        Zone Settings
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => actions.onPermissions(zone)}>
+        <KeyRound className="h-4 w-4 mr-2" />
+        Permissions
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      {!compact && IMPORT_TYPES.has(zone.type) && (
+        <DropdownMenuItem onClick={() => actions.onImport(zone)}>
+          <Upload className="h-4 w-4 mr-2" />
+          Import Zone File
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuItem onClick={() => actions.onExport(zone)}>
+        <Download className="h-4 w-4 mr-2" />
+        Export Zone File
+      </DropdownMenuItem>
+      {CLONE_TYPES.has(zone.type) && (
+        <DropdownMenuItem onClick={() => actions.onClone(zone)}>
+          <Copy className="h-4 w-4 mr-2" />
+          Clone Zone
+        </DropdownMenuItem>
+      )}
+      {!compact && CONVERT_TYPES.has(zone.type) && (
+        <DropdownMenuItem onClick={() => actions.onConvert(zone)}>
+          <ArrowLeftRight className="h-4 w-4 mr-2" />
+          Convert Zone Type
+        </DropdownMenuItem>
+      )}
+      {RESYNC_TYPES.has(zone.type) && (
+        <DropdownMenuItem onClick={() => actions.onResync(zone)}>
+          <RotateCw className="h-4 w-4 mr-2" />
+          Resync Zone
+        </DropdownMenuItem>
+      )}
+      <DropdownMenuSeparator />
+    </>
+  );
+}
 
 function ZoneTypeBadge({ type }: { type: Zone["type"] }) {
   const colors: Record<string, string> = {
@@ -176,6 +277,8 @@ interface RecordFormData {
   expiryTtl: string;
   ptr: boolean;
   createPtrZone: boolean;
+  // Edit-only: maps to the record's disabled flag via records/update.
+  disabled?: boolean;
   // APP record specific fields
   appName?: string;
   classPath?: string;
@@ -342,9 +445,26 @@ function RecordForm({
           <Badge variant="secondary" className="text-sm px-3 py-1">
             {data.type}
           </Badge>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-sm text-muted-foreground flex-1 min-w-0 truncate">
             {getTypeDescription()}
           </span>
+          {data.type !== "SOA" && (
+            <div className="flex items-center gap-2 shrink-0">
+              <Switch
+                id="record-enabled"
+                checked={!data.disabled}
+                onCheckedChange={(checked) =>
+                  onChange({ ...data, disabled: !checked })
+                }
+              />
+              <Label
+                htmlFor="record-enabled"
+                className="text-sm font-normal cursor-pointer"
+              >
+                Enabled
+              </Label>
+            </div>
+          )}
         </div>
       )}
 
@@ -1042,6 +1162,7 @@ function ZoneRecordsView({
   onBack,
   onDelete,
   onToggle,
+  actions,
   initialRecordName,
   initialRecordType,
   initialRecordValue,
@@ -1050,6 +1171,7 @@ function ZoneRecordsView({
   onBack: () => void;
   onDelete: (zone: Zone) => void;
   onToggle: (zone: Zone) => void;
+  actions: ZoneActions;
   initialRecordName?: string;
   initialRecordType?: string;
   initialRecordValue?: string;
@@ -1118,6 +1240,7 @@ function ZoneRecordsView({
       expiryTtl: record.expiryTtl?.toString() || "0",
       ptr: false,
       createPtrZone: false,
+      disabled: record.disabled,
     };
 
     if (record.type === "APP") {
@@ -1198,6 +1321,10 @@ function ZoneRecordsView({
         break;
       case "NS":
         rdata = { nameServer: newRecord.value };
+        // The NS form reuses the comments field for glue addresses.
+        if (newRecord.comments) {
+          rdata.glue = newRecord.comments;
+        }
         break;
       case "MX": {
         const [pref, exchange] = newRecord.value.split(" ");
@@ -1280,7 +1407,8 @@ function ZoneRecordsView({
       parseInt(newRecord.ttl),
       rdata,
       {
-        comments: newRecord.comments,
+        // For NS records the comments field carries glue, sent in rdata.
+        comments: newRecord.type === "NS" ? "" : newRecord.comments,
         expiryTtl: parseInt(newRecord.expiryTtl),
         ptr: newRecord.ptr,
         createPtrZone: newRecord.createPtrZone,
@@ -1319,6 +1447,7 @@ function ZoneRecordsView({
       expiryTtl: record.expiryTtl?.toString() || "0",
       ptr: false,
       createPtrZone: false,
+      disabled: record.disabled,
     };
 
     // Add APP-specific fields
@@ -1368,124 +1497,94 @@ function ZoneRecordsView({
 
     setIsSubmitting(true);
 
-    // First delete the old record
-    const oldRdata: Record<string, string> = {};
+    // One atomic /zones/records/update call: current values identify the
+    // record, new* params carry the changes. No delete + re-add, so a failed
+    // update can never lose the record.
+    const orig = editRecord.original.rData;
+    const rdata: Record<string, string> = {};
     switch (editRecord.original.type) {
       case "A":
       case "AAAA":
-        oldRdata.ipAddress = String(editRecord.original.rData.ipAddress || "");
+        rdata.ipAddress = String(orig.ipAddress || "");
+        rdata.newIpAddress = editRecord.value;
         break;
       case "CNAME":
-        oldRdata.cname = String(editRecord.original.rData.cname || "");
+        // CNAME is a singleton per name; the server takes the new value directly.
+        rdata.cname = editRecord.value;
         break;
       case "NS":
-        oldRdata.nameServer = String(
-          editRecord.original.rData.nameServer || "",
-        );
-        break;
-      case "MX":
-        oldRdata.preference = String(
-          editRecord.original.rData.preference || "",
-        );
-        oldRdata.exchange = String(editRecord.original.rData.exchange || "");
-        break;
-      case "TXT":
-        oldRdata.text = String(editRecord.original.rData.text || "");
-        break;
-      case "APP":
-        oldRdata.appName = String(editRecord.original.rData.appName || "");
-        oldRdata.classPath = String(editRecord.original.rData.classPath || "");
-        if (editRecord.original.rData.recordData) {
-          oldRdata.recordData = String(editRecord.original.rData.recordData);
+        rdata.nameServer = String(orig.nameServer || "");
+        rdata.newNameServer = editRecord.value;
+        // The NS form reuses the comments field for glue addresses.
+        if (editRecord.comments) {
+          rdata.glue = editRecord.comments;
         }
-        break;
-      case "SOA":
-        oldRdata.primaryNameServer = String(
-          editRecord.original.rData.primaryNameServer || "",
-        );
-        oldRdata.responsiblePerson = String(
-          editRecord.original.rData.responsiblePerson || "",
-        );
-        oldRdata.serial = String(editRecord.original.rData.serial || "");
-        oldRdata.refresh = String(editRecord.original.rData.refresh || "");
-        oldRdata.retry = String(editRecord.original.rData.retry || "");
-        oldRdata.expire = String(editRecord.original.rData.expire || "");
-        oldRdata.minimum = String(editRecord.original.rData.minimum || "");
-        break;
-      case "FWD":
-        oldRdata.protocol = String(editRecord.original.rData.protocol || "Udp");
-        oldRdata.forwarder = String(editRecord.original.rData.forwarder || "");
-        break;
-    }
-
-    const deleteResponse = await deleteRecord(
-      zone.name,
-      editRecord.original.name,
-      editRecord.original.type,
-      oldRdata,
-    );
-
-    if (deleteResponse.status !== "ok") {
-      toast.error(deleteResponse.errorMessage || "Failed to update record");
-      setIsSubmitting(false);
-      return;
-    }
-
-    // Then add the new record
-    let rdata: Record<string, string> = {};
-    switch (editRecord.type) {
-      case "A":
-      case "AAAA":
-        rdata = { ipAddress: editRecord.value };
-        break;
-      case "CNAME":
-        rdata = { cname: editRecord.value };
-        break;
-      case "NS":
-        rdata = { nameServer: editRecord.value };
         break;
       case "MX": {
         const [pref, exchange] = editRecord.value.split(" ");
-        rdata = {
-          preference: pref || "10",
-          exchange: exchange || editRecord.value,
-        };
+        rdata.preference = String(orig.preference ?? "1");
+        rdata.exchange = String(orig.exchange || "");
+        rdata.newPreference = pref || "10";
+        rdata.newExchange = exchange || editRecord.value;
         break;
       }
       case "TXT":
-        rdata = { text: editRecord.value };
+        rdata.text = String(orig.text || "");
+        rdata.newText = editRecord.value;
+        if (orig.splitText !== undefined) {
+          rdata.splitText = String(orig.splitText);
+        }
         break;
       case "PTR":
-        rdata = { ptrName: editRecord.value };
+        rdata.ptrName = String(orig.ptrName || "");
+        rdata.newPtrName = editRecord.value;
         break;
+      case "SRV": {
+        const parts = editRecord.value.split(" ");
+        rdata.priority = String(orig.priority ?? "0");
+        rdata.weight = String(orig.weight ?? "0");
+        rdata.port = String(orig.port ?? "0");
+        rdata.target = String(orig.target || "");
+        rdata.newPriority = parts[0] || "0";
+        rdata.newWeight = parts[1] || "0";
+        rdata.newPort = parts[2] || "0";
+        rdata.newTarget = parts[3] || "";
+        break;
+      }
+      case "CAA": {
+        const parts = editRecord.value.split(" ");
+        rdata.flags = String(orig.flags ?? "0");
+        rdata.tag = String(orig.tag || "issue");
+        rdata.value = String(orig.value || "");
+        rdata.newFlags = parts[0] || "0";
+        rdata.newTag = parts[1] || "issue";
+        rdata.newValue = parts.slice(2).join(" ").replace(/^"|"$/g, "");
+        break;
+      }
       case "APP":
-        rdata = {
-          appName: editRecord.appName || "",
-          classPath: editRecord.classPath || "",
-        };
+        rdata.appName = editRecord.appName || "";
+        rdata.classPath = editRecord.classPath || "";
         if (editRecord.recordData) {
           rdata.recordData = editRecord.recordData;
         }
         break;
       case "SOA":
-        rdata = {
-          primaryNameServer: editRecord.primaryNameServer || "",
-          responsiblePerson: editRecord.responsiblePerson || "",
-          serial: editRecord.serial || "1",
-          refresh: editRecord.refresh || "900",
-          retry: editRecord.retry || "300",
-          expire: editRecord.expire || "604800",
-          minimum: editRecord.minimum || "86400",
-        };
+        rdata.primaryNameServer = editRecord.primaryNameServer || "";
+        rdata.responsiblePerson = editRecord.responsiblePerson || "";
+        rdata.serial = editRecord.serial || "1";
+        rdata.refresh = editRecord.refresh || "900";
+        rdata.retry = editRecord.retry || "300";
+        rdata.expire = editRecord.expire || "604800";
+        rdata.minimum = editRecord.minimum || "86400";
         if (editRecord.useSerialDateScheme) {
           rdata.useSerialDateScheme = "true";
         }
         break;
       case "FWD":
-        rdata = {
-          protocol: editRecord.protocol || "Udp",
-          forwarder: editRecord.forwarder || "",
-        };
+        rdata.protocol = String(orig.protocol || "Udp");
+        rdata.forwarder = String(orig.forwarder || "");
+        rdata.newProtocol = editRecord.protocol || "Udp";
+        rdata.newForwarder = editRecord.forwarder || "";
         if (editRecord.forwarderPriority) {
           rdata.forwarderPriority = editRecord.forwarderPriority;
         }
@@ -1509,31 +1608,46 @@ function ZoneRecordsView({
         }
         break;
       default:
-        rdata = { value: editRecord.value };
+        toast.error(
+          `Editing ${editRecord.original.type} records is not supported`,
+        );
+        setIsSubmitting(false);
+        return;
     }
 
-    const addResponse = await addRecord(
+    // Support renaming: normalize the form name to a FQDN like the add flow.
+    const newDomain = editRecord.name.endsWith(zone.name)
+      ? editRecord.name
+      : editRecord.name === "@"
+        ? zone.name
+        : `${editRecord.name}.${zone.name}`;
+
+    const response = await updateRecord(
       zone.name,
-      editRecord.name,
-      editRecord.type,
-      parseInt(editRecord.ttl),
+      editRecord.original.name,
+      editRecord.original.type,
       rdata,
       {
-        comments: editRecord.comments,
+        newDomain,
+        ttl: parseInt(editRecord.ttl),
+        disable: editRecord.disabled ?? false,
+        // For NS records the comments field carries glue, sent above.
+        comments:
+          editRecord.original.type === "NS" ? undefined : editRecord.comments,
         expiryTtl: parseInt(editRecord.expiryTtl),
         ptr: editRecord.ptr,
         createPtrZone: editRecord.createPtrZone,
       },
     );
 
-    if (addResponse.status === "ok") {
+    if (response.status === "ok") {
       toast.success("Record updated successfully");
       setEditRecord(null);
       setIsEditOpen(false);
       navigate(`/zones/${encodeURIComponent(zone.name)}`);
       refetch();
     } else {
-      toast.error(addResponse.errorMessage || "Failed to update record");
+      toast.error(response.errorMessage || "Failed to update record");
     }
     setIsSubmitting(false);
   };
@@ -1559,6 +1673,23 @@ function ZoneRecordsView({
         break;
       case "TXT":
         rdata.text = String(recordToDelete.rData.text || "");
+        if (recordToDelete.rData.splitText !== undefined) {
+          rdata.splitText = String(recordToDelete.rData.splitText);
+        }
+        break;
+      case "PTR":
+        rdata.ptrName = String(recordToDelete.rData.ptrName || "");
+        break;
+      case "SRV":
+        rdata.priority = String(recordToDelete.rData.priority ?? "0");
+        rdata.weight = String(recordToDelete.rData.weight ?? "0");
+        rdata.port = String(recordToDelete.rData.port ?? "0");
+        rdata.target = String(recordToDelete.rData.target || "");
+        break;
+      case "CAA":
+        rdata.flags = String(recordToDelete.rData.flags ?? "0");
+        rdata.tag = String(recordToDelete.rData.tag || "issue");
+        rdata.value = String(recordToDelete.rData.value || "");
         break;
       case "APP":
         rdata.appName = String(recordToDelete.rData.appName || "");
@@ -1654,6 +1785,7 @@ function ZoneRecordsView({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <ZoneActionMenuItems zone={zone} actions={actions} />
               <DropdownMenuItem onClick={() => onToggle(zone)}>
                 <Power className="h-4 w-4 mr-2" />
                 {zone.disabled ? "Enable Zone" : "Disable Zone"}
@@ -1872,38 +2004,57 @@ function ZoneRecordsView({
             </div>
           ) : (
             <div className="divide-y">
-              {filteredRecords.map((record, idx) => (
-                <div
-                  key={`${record.name}-${record.type}-${idx}`}
-                  className="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-3 hover:bg-muted/50 transition-colors group cursor-pointer"
-                  onClick={() => handleEditClick(record)}
-                >
-                  <Badge
-                    variant="outline"
-                    className="w-12 sm:w-14 justify-center font-mono text-xs shrink-0"
+              {filteredRecords.map((record, idx) => {
+                // DNSSEC-managed types (RRSIG, NSEC, DNSKEY, ...) are
+                // server-maintained and have no editor.
+                const editable = recordTypes.includes(record.type);
+                return (
+                  <div
+                    key={`${record.name}-${record.type}-${idx}`}
+                    className={`flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-3 hover:bg-muted/50 transition-colors group ${
+                      editable ? "cursor-pointer" : ""
+                    } ${record.disabled ? "opacity-60" : ""}`}
+                    onClick={editable ? () => handleEditClick(record) : undefined}
                   >
-                    {record.type}
-                  </Badge>
-                  <span className="flex-[3] min-w-0" onClick={(e) => e.stopPropagation()}>
-                    <CopyableText
-                      text={record.name}
-                      iconVisibility="hover"
-                      className="font-mono text-sm w-full min-w-0"
-                    />
-                  </span>
-                  <span className="flex-[2] min-w-0 hidden sm:block" onClick={(e) => e.stopPropagation()}>
-                    <CopyableText
-                      text={formatRData(record)}
-                      iconVisibility="hover"
-                      className="font-mono text-sm text-muted-foreground w-full min-w-0"
-                    />
-                  </span>
-                  <span className="text-xs text-muted-foreground w-12 sm:w-16 text-right shrink-0">
-                    {record.ttl}s
-                  </span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                </div>
-              ))}
+                    <Badge
+                      variant="outline"
+                      className="w-12 sm:w-14 justify-center font-mono text-xs shrink-0"
+                    >
+                      {record.type}
+                    </Badge>
+                    <span className="flex-[3] min-w-0" onClick={(e) => e.stopPropagation()}>
+                      <CopyableText
+                        text={record.name}
+                        iconVisibility="hover"
+                        className="font-mono text-sm w-full min-w-0"
+                      />
+                    </span>
+                    <span className="flex-[2] min-w-0 hidden sm:block" onClick={(e) => e.stopPropagation()}>
+                      <CopyableText
+                        text={formatRData(record)}
+                        iconVisibility="hover"
+                        className="font-mono text-sm text-muted-foreground w-full min-w-0"
+                      />
+                    </span>
+                    {record.disabled && (
+                      <Badge
+                        variant="outline"
+                        className="text-muted-foreground text-xs shrink-0"
+                      >
+                        Disabled
+                      </Badge>
+                    )}
+                    <span className="text-xs text-muted-foreground w-12 sm:w-16 text-right shrink-0">
+                      {record.ttl}s
+                    </span>
+                    {editable ? (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    ) : (
+                      <span className="w-4 shrink-0" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -1960,6 +2111,18 @@ export default function Zones() {
   >("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
 
+  // Zone management dialogs (shared by the list rows and the detail header)
+  const [optionsZone, setOptionsZone] = useState<Zone | null>(null);
+  const [permissionsZone, setPermissionsZone] = useState<Zone | null>(null);
+  const [importTarget, setImportTarget] = useState<Zone | null>(null);
+  const [cloneSource, setCloneSource] = useState<Zone | null>(null);
+  const [convertTarget, setConvertTarget] = useState<Zone | null>(null);
+  // Bumped after an import so the records view refetches.
+  const [recordsRefreshKey, setRecordsRefreshKey] = useState(0);
+
+  // Reset to the first page whenever a filter changes (set in the handlers).
+  const [page, setPage] = useState(1);
+
   const zones = data?.zones ?? [];
   const selectedZone = zoneName
     ? zones.find((z) => z.name === zoneName) || null
@@ -1973,6 +2136,17 @@ export default function Zones() {
     const matchesType = typeFilter === "all" || zone.type === typeFilter;
     return matchesText && matchesStatus && matchesType;
   });
+
+  const ZONES_PER_PAGE = 25;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredZones.length / ZONES_PER_PAGE),
+  );
+  const currentPage = Math.min(page, totalPages);
+  const pagedZones = filteredZones.slice(
+    (currentPage - 1) * ZONES_PER_PAGE,
+    currentPage * ZONES_PER_PAGE,
+  );
 
   const handleCreate = async () => {
     if (!newZoneName.trim()) return;
@@ -2022,19 +2196,96 @@ export default function Zones() {
     }
   };
 
+  const handleExport = async (zone: Zone) => {
+    try {
+      const { blob, filename } = await exportZone(zone.name);
+      saveBlob(blob, filename);
+      toast.success(`Exported ${zone.name}`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to export zone",
+      );
+    }
+  };
+
+  const handleResync = async (zone: Zone) => {
+    const response = await resyncZone(zone.name);
+    if (response.status === "ok") {
+      toast.success(`Resync started for ${zone.name}`);
+      refetch();
+    } else {
+      toast.error(response.errorMessage || "Failed to resync zone");
+    }
+  };
+
+  const zoneActions: ZoneActions = {
+    onOptions: setOptionsZone,
+    onPermissions: setPermissionsZone,
+    onImport: setImportTarget,
+    onExport: handleExport,
+    onClone: setCloneSource,
+    onConvert: setConvertTarget,
+    onResync: handleResync,
+  };
+
+  const zoneDialogs = (
+    <>
+      <ZoneOptionsDialog
+        zone={optionsZone}
+        onOpenChange={(open) => {
+          if (!open) setOptionsZone(null);
+        }}
+        onSaved={refetch}
+      />
+      <ZonePermissionsDialog
+        zone={permissionsZone}
+        onOpenChange={(open) => {
+          if (!open) setPermissionsZone(null);
+        }}
+      />
+      <ZoneImportDialog
+        zone={importTarget}
+        onOpenChange={(open) => {
+          if (!open) setImportTarget(null);
+        }}
+        onImported={() => setRecordsRefreshKey((k) => k + 1)}
+      />
+      <ZoneCloneDialog
+        zone={cloneSource}
+        onOpenChange={(open) => {
+          if (!open) setCloneSource(null);
+        }}
+        onCloned={(newZone) => {
+          refetch();
+          navigate(`/zones/${encodeURIComponent(newZone)}`);
+        }}
+      />
+      <ZoneConvertDialog
+        zone={convertTarget}
+        onOpenChange={(open) => {
+          if (!open) setConvertTarget(null);
+        }}
+        onConverted={refetch}
+      />
+    </>
+  );
+
   // Show zone detail view if a zone is selected
   if (selectedZone) {
     return (
       <>
         <ZoneRecordsView
+          key={`${selectedZone.name}-${recordsRefreshKey}`}
           zone={selectedZone}
           onBack={() => navigate("/zones")}
           onDelete={(z) => setZoneToDelete(z)}
           onToggle={(z) => handleToggle(z)}
+          actions={zoneActions}
           initialRecordName={recordName}
           initialRecordType={recordType}
           initialRecordValue={recordValue}
         />
+        {zoneDialogs}
 
         {/* Delete Confirmation */}
         <AlertDialog
@@ -2138,12 +2389,21 @@ export default function Zones() {
           <Input
             placeholder="Search zones..."
             value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            onChange={(e) => {
+              setFilter(e.target.value);
+              setPage(1);
+            }}
             className="pl-9"
           />
         </div>
         <div className="flex items-center gap-2">
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <Select
+            value={typeFilter}
+            onValueChange={(v) => {
+              setTypeFilter(v);
+              setPage(1);
+            }}
+          >
             <SelectTrigger className="flex-1 sm:w-[140px]">
               <SelectValue placeholder="Type" />
             </SelectTrigger>
@@ -2158,9 +2418,10 @@ export default function Zones() {
           </Select>
           <Select
             value={statusFilter}
-            onValueChange={(v: "all" | "active" | "disabled") =>
-              setStatusFilter(v)
-            }
+            onValueChange={(v: "all" | "active" | "disabled") => {
+              setStatusFilter(v);
+              setPage(1);
+            }}
           >
             <SelectTrigger className="flex-1 sm:w-[140px]">
               <SelectValue placeholder="Status" />
@@ -2203,7 +2464,7 @@ export default function Zones() {
             </div>
           ) : (
             <div className="divide-y">
-              {filteredZones.map((zone) => (
+              {pagedZones.map((zone) => (
                 <div
                   key={zone.name}
                   className="flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer group"
@@ -2238,6 +2499,11 @@ export default function Zones() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      <ZoneActionMenuItems
+                        zone={zone}
+                        actions={zoneActions}
+                        compact
+                      />
                       <DropdownMenuItem onClick={() => handleToggle(zone)}>
                         <Power className="h-4 w-4 mr-2" />
                         {zone.disabled ? "Enable Zone" : "Disable Zone"}
@@ -2258,6 +2524,44 @@ export default function Zones() {
           )}
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {filteredZones.length > ZONES_PER_PAGE && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Showing {(currentPage - 1) * ZONES_PER_PAGE + 1}–
+            {Math.min(currentPage * ZONES_PER_PAGE, filteredZones.length)} of{" "}
+            {filteredZones.length} zones
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={currentPage === 1}
+              onClick={() => setPage(currentPage - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span className="sr-only">Previous page</span>
+            </Button>
+            <span className="px-2 tabular-nums">
+              {currentPage} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={currentPage === totalPages}
+              onClick={() => setPage(currentPage + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+              <span className="sr-only">Next page</span>
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {zoneDialogs}
 
       {/* Delete Confirmation */}
       <AlertDialog

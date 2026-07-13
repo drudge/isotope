@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
@@ -23,8 +23,11 @@ import type { ChartConfig } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { useApi } from "@/hooks/useApi";
-import { getStats } from "@/api/dns";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { getStats, type StatsType } from "@/api/dns";
+import type { ApiResponse } from "@/types/api";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import QueryLogsModal from "@/components/QueryLogsModal";
@@ -124,7 +127,10 @@ interface StatsResponse {
   topBlockedDomains: Array<{ name: string; hits: number }>;
 }
 
-type TimeRange = "LastHour" | "LastDay" | "LastWeek" | "LastMonth" | "LastYear";
+type TimeRange = StatsType;
+
+const AUTO_REFRESH_INTERVAL_MS = 10_000;
+const AUTO_REFRESH_STORAGE_KEY = "isotope_dashboard_autorefresh";
 
 // Chart colors matching Technitium's scheme
 const TECHNITIUM_COLORS = {
@@ -223,10 +229,25 @@ function calculatePercentage(value: number, total: number): string {
   return ((value / total) * 100).toFixed(2) + "%";
 }
 
+// Format a Date as a value for <input type="datetime-local"> (local time, minute precision)
+function toDateTimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export default function Dashboard() {
   useDocumentTitle("Dashboard");
   const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState<TimeRange>("LastHour");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [appliedCustomRange, setAppliedCustomRange] = useState<{
+    start: string;
+    end: string;
+  } | null>(null);
+  const [autoRefresh, setAutoRefresh] = useState(
+    () => localStorage.getItem(AUTO_REFRESH_STORAGE_KEY) === "true",
+  );
   const [expandedLists, setExpandedLists] = useState(false);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [logsModalFilter, setLogsModalFilter] = useState<{
@@ -239,13 +260,138 @@ export default function Dashboard() {
     setShowLogsModal(true);
   };
 
-  const { data: statsData, isLoading: statsLoading } = useApi<StatsResponse>(
-    () =>
-      getStats(timeRange) as Promise<
-        import("@/types/api").ApiResponse<StatsResponse>
-      >,
-    [timeRange],
+  const [statsData, setStatsData] = useState<StatsResponse | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const fetchSeqRef = useRef(0);
+  const fetchInFlightRef = useRef(false);
+
+  // Foreground fetches (initial load, range changes) show the loading skeletons;
+  // silent fetches (live auto-refresh) keep the previous data on screen.
+  const fetchStats = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      if (timeRange === "Custom" && !appliedCustomRange) return;
+      // Background polls never stack on top of an in-flight request
+      if (silent && fetchInFlightRef.current) return;
+      const seq = ++fetchSeqRef.current;
+      fetchInFlightRef.current = true;
+      if (!silent) setStatsLoading(true);
+      try {
+        const response = (await getStats(
+          timeRange,
+          timeRange === "Custom" && appliedCustomRange
+            ? appliedCustomRange
+            : undefined,
+        )) as ApiResponse<StatsResponse>;
+        if (seq !== fetchSeqRef.current) return; // superseded by a newer request
+        if (response.status === "ok" && response.response) {
+          setStatsData(response.response);
+        } else if (!silent) {
+          setStatsData(null);
+          toast.error(
+            response.errorMessage || "Failed to load dashboard statistics",
+          );
+        }
+      } catch (err) {
+        if (seq !== fetchSeqRef.current || silent) return;
+        setStatsData(null);
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Failed to load dashboard statistics",
+        );
+      } finally {
+        if (seq === fetchSeqRef.current) {
+          fetchInFlightRef.current = false;
+          if (!silent) setStatsLoading(false);
+        }
+      }
+    },
+    [timeRange, appliedCustomRange],
   );
+
+  useEffect(() => {
+    void fetchStats();
+  }, [fetchStats]);
+
+  // Live auto-refresh: poll while enabled and the page is visible. Paused for
+  // custom ranges (a fixed historical window has nothing to live-update).
+  useEffect(() => {
+    if (!autoRefresh || timeRange === "Custom") return;
+
+    let intervalId: number | undefined;
+    const stop = () => {
+      if (intervalId !== undefined) {
+        window.clearInterval(intervalId);
+        intervalId = undefined;
+      }
+    };
+    const start = () => {
+      if (intervalId === undefined) {
+        intervalId = window.setInterval(
+          () => void fetchStats({ silent: true }),
+          AUTO_REFRESH_INTERVAL_MS,
+        );
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        void fetchStats({ silent: true }); // catch up immediately, then resume
+        start();
+      }
+    };
+
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [autoRefresh, timeRange, fetchStats]);
+
+  const toggleAutoRefresh = () => {
+    const next = !autoRefresh;
+    setAutoRefresh(next);
+    localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, String(next));
+  };
+
+  const handleTimeRangeChange = (value: string) => {
+    const range = value as TimeRange;
+    if (range === "Custom" && !customStart && !customEnd) {
+      // Default the pickers to the last 24 hours on first reveal
+      const now = new Date();
+      setCustomStart(
+        toDateTimeLocalValue(new Date(now.getTime() - 24 * 60 * 60 * 1000)),
+      );
+      setCustomEnd(toDateTimeLocalValue(now));
+    }
+    setTimeRange(range);
+  };
+
+  const applyCustomRange = () => {
+    if (!customStart || !customEnd) {
+      toast.error("Select both a From and a To time");
+      return;
+    }
+    const start = new Date(customStart);
+    const end = new Date(customEnd);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      toast.error("Invalid date/time value");
+      return;
+    }
+    if (start.getTime() >= end.getTime()) {
+      toast.error("The From time must be before the To time");
+      return;
+    }
+    setAppliedCustomRange({
+      start: start.toISOString(),
+      end: end.toISOString(),
+    });
+  };
+
+  const isCustomRange = timeRange === "Custom";
+  const liveActive = autoRefresh && !isCustomRange;
 
   const stats = statsData?.stats;
   const mainChartData = statsData?.mainChartData
@@ -441,29 +587,119 @@ export default function Dashboard() {
             <CardTitle className="text-base font-semibold">
               Query Statistics
             </CardTitle>
-            <Tabs
-              value={timeRange}
-              onValueChange={(v) => setTimeRange(v as TimeRange)}
-            >
-              <TabsList className="h-8 sm:h-9 w-full sm:w-auto grid grid-cols-5 sm:flex">
-                <TabsTrigger value="LastHour" className="text-xs px-2 sm:px-3">
-                  Hour
-                </TabsTrigger>
-                <TabsTrigger value="LastDay" className="text-xs px-2 sm:px-3">
-                  Day
-                </TabsTrigger>
-                <TabsTrigger value="LastWeek" className="text-xs px-2 sm:px-3">
-                  Week
-                </TabsTrigger>
-                <TabsTrigger value="LastMonth" className="text-xs px-2 sm:px-3">
-                  Month
-                </TabsTrigger>
-                <TabsTrigger value="LastYear" className="text-xs px-2 sm:px-3">
-                  Year
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <span
+                className="self-start sm:self-auto"
+                title={
+                  isCustomRange
+                    ? "Live refresh is unavailable for a custom range"
+                    : liveActive
+                      ? "Live refresh on — updating every 10 seconds"
+                      : "Refresh automatically every 10 seconds"
+                }
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={isCustomRange}
+                  aria-pressed={liveActive}
+                  onClick={toggleAutoRefresh}
+                  className={cn(
+                    "h-8 gap-1.5 px-2.5 text-xs",
+                    liveActive ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  <span className="relative flex h-2 w-2" aria-hidden="true">
+                    {liveActive && (
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+                    )}
+                    <span
+                      className={cn(
+                        "relative inline-flex h-2 w-2 rounded-full",
+                        liveActive
+                          ? "bg-emerald-500"
+                          : "bg-muted-foreground/40",
+                      )}
+                    />
+                  </span>
+                  Live
+                </Button>
+              </span>
+              <Tabs value={timeRange} onValueChange={handleTimeRangeChange}>
+                <TabsList className="h-8 sm:h-9 w-full sm:w-auto grid grid-cols-6 sm:flex">
+                  <TabsTrigger
+                    value="LastHour"
+                    className="text-xs px-2 sm:px-3"
+                  >
+                    Hour
+                  </TabsTrigger>
+                  <TabsTrigger value="LastDay" className="text-xs px-2 sm:px-3">
+                    Day
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="LastWeek"
+                    className="text-xs px-2 sm:px-3"
+                  >
+                    Week
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="LastMonth"
+                    className="text-xs px-2 sm:px-3"
+                  >
+                    Month
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="LastYear"
+                    className="text-xs px-2 sm:px-3"
+                  >
+                    Year
+                  </TabsTrigger>
+                  <TabsTrigger value="Custom" className="text-xs px-2 sm:px-3">
+                    Custom
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
+          {isCustomRange && (
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-end gap-2 sm:gap-3">
+              <div className="grid gap-1.5">
+                <Label
+                  htmlFor="custom-range-start"
+                  className="text-xs text-muted-foreground"
+                >
+                  From
+                </Label>
+                <Input
+                  id="custom-range-start"
+                  type="datetime-local"
+                  value={customStart}
+                  max={customEnd || undefined}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                  className="h-8 w-full sm:w-[205px] text-xs"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label
+                  htmlFor="custom-range-end"
+                  className="text-xs text-muted-foreground"
+                >
+                  To
+                </Label>
+                <Input
+                  id="custom-range-end"
+                  type="datetime-local"
+                  value={customEnd}
+                  min={customStart || undefined}
+                  onChange={(e) => setCustomEnd(e.target.value)}
+                  className="h-8 w-full sm:w-[205px] text-xs"
+                />
+              </div>
+              <Button size="sm" className="h-8" onClick={applyCustomRange}>
+                Apply
+              </Button>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {statsLoading ? (

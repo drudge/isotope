@@ -150,6 +150,24 @@ export async function convertLeaseToReserved(name: string, hardwareAddress: stri
   return apiClient.get<void>('/dhcp/leases/convertToReserved', { name, hardwareAddress });
 }
 
+// Reserved leases: pre-provision an IP for a MAC before the device ever
+// requests a lease (unlike convertToReserved, which needs an active lease).
+export async function addReservedLease(
+  name: string,
+  hardwareAddress: string,
+  ipAddress: string,
+  options?: { hostName?: string; comments?: string }
+): Promise<ApiResponse<void>> {
+  const params: Record<string, string> = { name, hardwareAddress, ipAddress };
+  if (options?.hostName) params.hostName = options.hostName;
+  if (options?.comments) params.comments = options.comments;
+  return apiClient.get<void>('/dhcp/scopes/addReservedLease', params);
+}
+
+export async function removeReservedLease(name: string, hardwareAddress: string): Promise<ApiResponse<void>> {
+  return apiClient.get<void>('/dhcp/scopes/removeReservedLease', { name, hardwareAddress });
+}
+
 export async function convertLeaseToDynamic(name: string, hardwareAddress: string): Promise<ApiResponse<void>> {
   return apiClient.get<void>('/dhcp/leases/convertToDynamic', { name, hardwareAddress });
 }

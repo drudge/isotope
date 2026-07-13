@@ -435,3 +435,52 @@ export async function updateSettings(
 export async function getTsigKeyNames(): Promise<ApiResponse<TsigKeyNamesResponse>> {
   return apiClient.get<TsigKeyNamesResponse>('/settings/getTsigKeyNames');
 }
+
+// Backup & Restore. Every component defaults to false server-side, so only
+// the selected ones are sent.
+export interface BackupComponents {
+  authConfig?: boolean;
+  clusterConfig?: boolean;
+  webServiceSettings?: boolean;
+  dnsSettings?: boolean;
+  logSettings?: boolean;
+  zones?: boolean;
+  allowedZones?: boolean;
+  blockedZones?: boolean;
+  blockLists?: boolean;
+  apps?: boolean;
+  scopes?: boolean;
+  stats?: boolean;
+  logs?: boolean;
+}
+
+function backupComponentParams(components: BackupComponents): Record<string, string> {
+  const params: Record<string, string> = {};
+  Object.entries(components).forEach(([key, value]) => {
+    if (value) params[key] = 'true';
+  });
+  return params;
+}
+
+export async function backupSettings(
+  components: BackupComponents
+): Promise<{ blob: Blob; filename: string }> {
+  const { blob, filename } = await apiClient.download(
+    '/settings/backup',
+    backupComponentParams(components),
+    300000 // backups with logs/stats can be large
+  );
+  return { blob, filename: filename ?? 'technitium-backup.zip' };
+}
+
+export async function restoreSettings(
+  file: File,
+  components: BackupComponents,
+  deleteExistingFiles: boolean
+): Promise<ApiResponse<DnsSettings>> {
+  const params = backupComponentParams(components);
+  if (deleteExistingFiles) params.deleteExistingFiles = 'true';
+  const formData = new FormData();
+  formData.append('file', file);
+  return apiClient.upload<DnsSettings>('/settings/restore', formData, params);
+}

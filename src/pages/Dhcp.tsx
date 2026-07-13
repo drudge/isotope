@@ -33,9 +33,17 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,6 +71,8 @@ import {
   removeDhcpLease,
   convertLeaseToReserved,
   convertLeaseToDynamic,
+  addReservedLease,
+  removeReservedLease,
   type DhcpScopeListItem,
   type DhcpScopeDetail,
   type DhcpLease,
@@ -80,6 +90,17 @@ function subnetToCidr(mask: string): number {
         cidr + (parseInt(octet) >>> 0).toString(2).split('1').length - 1,
       0
     );
+}
+
+// Hex pairs separated by ':' or '-', e.g. 00:11:22:33:44:55
+const MAC_ADDRESS_REGEX = /^[0-9A-Fa-f]{2}([:-][0-9A-Fa-f]{2}){5}$/;
+
+function isValidIPv4(address: string): boolean {
+  const octets = address.split('.');
+  return (
+    octets.length === 4 &&
+    octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
+  );
 }
 
 function formatLeaseExpiry(dateStr: string): string {
@@ -697,6 +718,150 @@ function ScopeEditDialog({
   );
 }
 
+// --- Add Reservation Dialog ---
+
+function AddReservationDialog({
+  open,
+  onOpenChange,
+  scopes,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  scopes: DhcpScopeListItem[];
+  onSaved: () => void;
+}) {
+  const [scope, setScope] = useState('');
+  const [hardwareAddress, setHardwareAddress] = useState('');
+  const [ipAddress, setIpAddress] = useState('');
+  const [hostName, setHostName] = useState('');
+  const [comments, setComments] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Reset form when dialog opens
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setScope(scopes.length === 1 ? scopes[0].name : '');
+      setHardwareAddress('');
+      setIpAddress('');
+      setHostName('');
+      setComments('');
+    }
+    onOpenChange(nextOpen);
+  };
+
+  const handleSave = async () => {
+    if (!scope) {
+      toast.error('Please select a scope');
+      return;
+    }
+    const mac = hardwareAddress.trim();
+    if (!MAC_ADDRESS_REGEX.test(mac)) {
+      toast.error('Invalid MAC address. Expected format: 00:11:22:33:44:55');
+      return;
+    }
+    const ip = ipAddress.trim();
+    if (!isValidIPv4(ip)) {
+      toast.error('Invalid IPv4 address');
+      return;
+    }
+
+    setSaving(true);
+    const response = await addReservedLease(scope, mac, ip, {
+      hostName: hostName.trim() || undefined,
+      comments: comments.trim() || undefined,
+    });
+    setSaving(false);
+
+    if (response.status === 'ok') {
+      toast.success('Reservation added successfully');
+      onSaved();
+      onOpenChange(false);
+    } else {
+      toast.error(response.errorMessage || 'Failed to add reservation');
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-[95vw] sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add Reservation</DialogTitle>
+          <DialogDescription>
+            Reserve an IP address for a device by MAC address, even before it first connects
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="reservation-scope">Scope *</Label>
+            <Select value={scope} onValueChange={setScope}>
+              <SelectTrigger id="reservation-scope" className="w-full">
+                <SelectValue placeholder="Select a scope" />
+              </SelectTrigger>
+              <SelectContent>
+                {scopes.map((s) => (
+                  <SelectItem key={s.name} value={s.name}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reservation-mac">MAC Address *</Label>
+            <Input
+              id="reservation-mac"
+              value={hardwareAddress}
+              onChange={(e) => setHardwareAddress(e.target.value)}
+              placeholder="00:11:22:33:44:55"
+              className="font-mono"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reservation-ip">IP Address *</Label>
+            <Input
+              id="reservation-ip"
+              value={ipAddress}
+              onChange={(e) => setIpAddress(e.target.value)}
+              placeholder="e.g., 192.168.1.50"
+              className="font-mono"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reservation-hostname">Hostname</Label>
+            <Input
+              id="reservation-hostname"
+              value={hostName}
+              onChange={(e) => setHostName(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reservation-comments">Comments</Label>
+            <Input
+              id="reservation-comments"
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              placeholder="Optional"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving && <IsotopeSpinner size="sm" className="mr-2" />}
+            Add Reservation
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // --- Main Page ---
 
 export default function Dhcp() {
@@ -726,10 +891,12 @@ export default function Dhcp() {
   // Dialog state
   const [showScopeDialog, setShowScopeDialog] = useState(false);
   const [editingScope, setEditingScope] = useState<DhcpScopeListItem | null>(null);
+  const [showReservationDialog, setShowReservationDialog] = useState(false);
 
   // AlertDialog state
   const [scopeToDelete, setScopeToDelete] = useState<string | null>(null);
   const [leaseToRemove, setLeaseToRemove] = useState<DhcpLease | null>(null);
+  const [reservationToRemove, setReservationToRemove] = useState<DhcpLease | null>(null);
   const [processing, setProcessing] = useState(false);
 
   const handleTabChange = (value: string) => {
@@ -798,6 +965,24 @@ export default function Dhcp() {
       refetchLeases();
     } else {
       toast.error(response.errorMessage || 'Failed to remove lease');
+    }
+  };
+
+  const handleRemoveReservation = async () => {
+    if (!reservationToRemove) return;
+    setProcessing(true);
+    const response = await removeReservedLease(
+      reservationToRemove.scope,
+      reservationToRemove.hardwareAddress
+    );
+    setProcessing(false);
+
+    if (response.status === 'ok') {
+      toast.success('Reservation removed successfully');
+      setReservationToRemove(null);
+      refetchLeases();
+    } else {
+      toast.error(response.errorMessage || 'Failed to remove reservation');
     }
   };
 
@@ -1052,7 +1237,14 @@ export default function Dhcp() {
             </TabsContent>
 
             {/* Leases Tab */}
-            <TabsContent value="leases" className="mt-4">
+            <TabsContent value="leases" className="mt-4 space-y-3">
+              {/* Toolbar */}
+              <div className="flex items-center justify-end">
+                <Button variant="outline" size="sm" onClick={() => setShowReservationDialog(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Reservation
+                </Button>
+              </div>
               <Card>
                 <CardContent className="p-0">
                   {leasesLoading ? (
@@ -1114,6 +1306,17 @@ export default function Dhcp() {
                             >
                               {lease.type === 'Reserved' ? 'To Dynamic' : 'To Reserved'}
                             </Button>
+                            {lease.type === 'Reserved' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => setReservationToRemove(lease)}
+                                disabled={processing}
+                              >
+                                Remove Reservation
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -1193,6 +1396,14 @@ export default function Dhcp() {
         onSaved={() => refetchScopes()}
       />
 
+      {/* Add Reservation Dialog */}
+      <AddReservationDialog
+        open={showReservationDialog}
+        onOpenChange={setShowReservationDialog}
+        scopes={scopes}
+        onSaved={() => refetchLeases()}
+      />
+
       {/* Delete Scope Confirmation */}
       <AlertDialog open={!!scopeToDelete} onOpenChange={() => !processing && setScopeToDelete(null)}>
         <AlertDialogContent>
@@ -1232,6 +1443,28 @@ export default function Dhcp() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {processing ? 'Removing...' : 'Remove Lease'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Remove Reservation Confirmation */}
+      <AlertDialog open={!!reservationToRemove} onOpenChange={() => !processing && setReservationToRemove(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Reservation?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the reservation for {reservationToRemove?.address} ({reservationToRemove?.hardwareAddress}) from the "{reservationToRemove?.scope}" scope configuration. The device keeps its current lease until it expires, but is no longer guaranteed this IP address.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={processing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemoveReservation}
+              disabled={processing}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {processing ? 'Removing...' : 'Remove Reservation'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

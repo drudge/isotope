@@ -7,18 +7,20 @@ A clean, fast web interface for [Technitium DNS Server](https://technitium.com/d
 ## Features
 
 - Modern, responsive UI that works on desktop and mobile
-- Real-time dashboard with query statistics and charts
-- Zone management with full DNS record editing
+- Real-time dashboard with query statistics, charts, live auto-refresh, and custom date ranges
+- Zone management with full DNS record editing, per-zone options (query access, zone transfer, notify, dynamic updates), and per-zone permissions
+- Zone file import/export, clone, convert, and resync
 - Cache browser with domain-level controls
 - Block list and allow list management
-- DHCP scope and lease management
+- DHCP scope and lease management, including MAC address reservations
 - DNS Client for query testing
 - DNS Apps management
-- Query log viewer with advanced filtering
+- Query log viewer with advanced filtering, live tail, one-click block/allow, and CSV export
 - Server log viewer with syntax highlighting
 - Administration panel (users, groups, sessions, permissions)
-- Comprehensive server settings
+- Comprehensive server settings with one-click backup and restore
 - Cluster management
+- Command palette (⌘K) for quick navigation and actions
 - Dark mode support
 
 ## Installation

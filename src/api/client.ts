@@ -148,6 +148,79 @@ class ApiClient {
       timeoutMessage: "Upload timed out",
     });
   }
+
+  // POST with a raw text body (e.g. RFC 1035 zone file import).
+  async postText<T>(
+    endpoint: string,
+    params: Record<string, string> = {},
+    text: string = "",
+  ): Promise<ApiResponse<T>> {
+    return this.send<T>(endpoint, {
+      method: "POST",
+      query: params,
+      headers: { "Content-Type": "text/plain" },
+      body: text,
+      timeoutMs: 60000,
+      timeoutMessage: "Import timed out",
+    });
+  }
+
+  // GET that returns a file (zone export, backup zip, CSV export). The token
+  // stays in the Authorization header, and a JSON payload in the response is
+  // treated as a server-reported error.
+  async download(
+    endpoint: string,
+    params: Record<string, string> = {},
+    timeoutMs = 120000,
+  ): Promise<{ blob: Blob; filename: string | null }> {
+    const url = new URL(`${this.baseUrl}${endpoint}`, window.location.origin);
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        url.searchParams.append(key, value);
+      }
+    });
+
+    const headers: Record<string, string> = {};
+    const token = this.getToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url.toString(), {
+        signal: controller.signal,
+        headers,
+      });
+
+      const contentType = response.headers.get("Content-Type") ?? "";
+      if (contentType.includes("application/json")) {
+        const data = (await response.json()) as ApiResponse<unknown>;
+        if (data.status === "invalid-token") {
+          this.clearToken();
+          window.dispatchEvent(new CustomEvent("auth:invalid-token"));
+        }
+        throw new Error(data.errorMessage || "Download failed");
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      return { blob: await response.blob(), filename: match?.[1] ?? null };
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("Download timed out");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 export const apiClient = new ApiClient();

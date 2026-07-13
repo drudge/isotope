@@ -13,6 +13,7 @@ import {
   FileText,
   Settings2,
   ExternalLink,
+  DatabaseBackup,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +38,7 @@ import RecursionSettings from '@/components/settings/RecursionSettings';
 import CacheSettings from '@/components/settings/CacheSettings';
 import ProxyForwardersSettings from '@/components/settings/ProxyForwardersSettings';
 import LoggingSettings from '@/components/settings/LoggingSettings';
+import BackupRestore from '@/components/settings/BackupRestore';
 
 type TabValue =
   | 'general'
@@ -47,7 +49,8 @@ type TabValue =
   | 'cache'
   | 'blocking'
   | 'proxy'
-  | 'logging';
+  | 'logging'
+  | 'backup';
 
 export default function Settings() {
   useDocumentTitle('Settings');
@@ -132,7 +135,7 @@ export default function Settings() {
 
       {/* Tabs */}
       <Tabs value={currentTab} onValueChange={handleTabChange}>
-        <TabsList className="w-full grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 h-auto gap-1">
+        <TabsList className="w-full grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-10 h-auto gap-1">
           <TabsTrigger value="general" className="flex-col gap-1 px-2 py-2">
             <Server className="h-4 w-4" />
             <span className="text-[11px] leading-tight">General</span>
@@ -168,6 +171,10 @@ export default function Settings() {
           <TabsTrigger value="logging" className="flex-col gap-1 px-2 py-2">
             <FileText className="h-4 w-4" />
             <span className="text-[11px] leading-tight">Logging</span>
+          </TabsTrigger>
+          <TabsTrigger value="backup" className="flex-col gap-1 px-2 py-2">
+            <DatabaseBackup className="h-4 w-4" />
+            <span className="text-[11px] leading-tight">Backup</span>
           </TabsTrigger>
         </TabsList>
 
@@ -260,6 +267,10 @@ export default function Settings() {
             isLoading={isLoading}
             onSave={handleSave}
           />
+        </TabsContent>
+
+        <TabsContent value="backup" className="mt-6">
+          <BackupRestore onRestored={refetch} />
         </TabsContent>
       </Tabs>
     </div>
