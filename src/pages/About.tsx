@@ -31,8 +31,19 @@ export default function About() {
                 strokeWidth="32"
                 opacity="0.3"
               />
-              <circle cx="256" cy="256" r="80" />
-              <circle cx="456" cy="256" r="40" />
+              <circle
+                cx="256"
+                cy="256"
+                r="80"
+                className="animate-nucleus-pulse"
+                style={{ transformOrigin: "256px 256px" }}
+              />
+              <g
+                className="animate-orbit"
+                style={{ transformOrigin: "256px 256px" }}
+              >
+                <circle cx="456" cy="256" r="40" />
+              </g>
             </svg>
           </div>
         </div>
