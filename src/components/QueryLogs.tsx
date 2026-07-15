@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
   Search,
   Copy,
   Download,
   Filter,
+  Pause,
+  Play,
   RotateCcw,
+  ShieldBan,
+  ShieldCheck,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { IsotopeSpinner } from "@/components/ui/isotope-spinner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,9 +25,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { queryLogs, type QueryLogEntry } from "@/api/logs";
+import { exportQueryLogs, queryLogs, type QueryLogEntry } from "@/api/logs";
 import { listApps, type DnsApp } from "@/api/apps";
-import { cn } from "@/lib/utils";
+import { addAllowedZone, addBlockedZone } from "@/api/zones";
+import { cn, saveBlob } from "@/lib/utils";
 
 export default function QueryLogs() {
   const [searchParams] = useSearchParams();
@@ -35,6 +41,11 @@ export default function QueryLogs() {
   const [entriesPerPage, setEntriesPerPage] = useState(50);
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [pendingZoneAction, setPendingZoneAction] = useState<string | null>(
+    null,
+  );
 
   // Query logger state
   const [queryLoggers, setQueryLoggers] = useState<
@@ -98,77 +109,163 @@ export default function QueryLogs() {
     fetchQueryLoggers();
   }, []);
 
-  const fetchLogs = useCallback(async () => {
-    if (!selectedLogger) {
-      setError("No query logger selected");
-      return;
-    }
+  // Live-tail polls must not pile up behind a slow request or overwrite a
+  // newer one, so track in-flight state and request recency.
+  const fetchInFlight = useRef(false);
+  const fetchSeq = useRef(0);
 
-    setLoading(true);
-    setError(null);
-    try {
-      // Parse selected logger: "AppName::ClassPath"
-      const [appName, classPath] = selectedLogger.split("::");
-
-      const response = await queryLogs({
-        name: appName,
-        classPath: classPath,
-        pageNumber,
-        entriesPerPage,
-        descendingOrder: true,
-        clientIpAddress: clientIpAddress || undefined,
-        protocol: protocol && protocol !== "all" ? protocol : undefined,
-        responseType:
-          responseType && responseType !== "all" ? responseType : undefined,
-        rcode: rcode || undefined,
-        qname: qname || undefined,
-        qtype: qtype || undefined,
-      });
-
-      if (response.status === "ok" && response.response) {
-        setLogs(response.response.entries || []);
-        setTotalPages(response.response.totalPages || 0);
-        setTotalEntries(response.response.totalEntries || 0);
-      } else {
-        throw new Error(response.errorMessage || "Failed to load logs");
+  // Background fetches (live tail) swap data in place without flashing the
+  // loading state; only initial/filter-change loads show the spinner.
+  const fetchLogs = useCallback(
+    async ({ background = false }: { background?: boolean } = {}) => {
+      if (!selectedLogger) {
+        setError("No query logger selected");
+        return;
       }
-    } catch (err) {
-      console.error("Failed to fetch query logs:", err);
-      const errorMsg = err instanceof Error ? err.message : "Unknown error";
-      if (errorMsg.includes("not found")) {
-        setError(
-          "The selected query logger app was not found or has been uninstalled. Please select a different query logger.",
-        );
-      } else if (errorMsg.includes("404")) {
-        setError(
-          "Query logging may not be enabled on this DNS server. Please check your server settings.",
-        );
-      } else {
-        setError(`Failed to load query logs: ${errorMsg}`);
+      if (background && fetchInFlight.current) return;
+
+      const seq = ++fetchSeq.current;
+      fetchInFlight.current = true;
+      if (!background) {
+        setLoading(true);
+        setError(null);
       }
-      setLogs([]);
-      setTotalPages(0);
-      setTotalEntries(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    selectedLogger,
-    pageNumber,
-    entriesPerPage,
-    clientIpAddress,
-    protocol,
-    responseType,
-    rcode,
-    qname,
-    qtype,
-  ]);
+      try {
+        // Parse selected logger: "AppName::ClassPath"
+        const [appName, classPath] = selectedLogger.split("::");
+
+        const response = await queryLogs({
+          name: appName,
+          classPath: classPath,
+          pageNumber,
+          entriesPerPage,
+          descendingOrder: true,
+          clientIpAddress: clientIpAddress || undefined,
+          protocol: protocol && protocol !== "all" ? protocol : undefined,
+          responseType:
+            responseType && responseType !== "all" ? responseType : undefined,
+          rcode: rcode || undefined,
+          qname: qname || undefined,
+          qtype: qtype || undefined,
+        });
+
+        // A newer request superseded this one; drop the stale result
+        if (seq !== fetchSeq.current) return;
+
+        if (response.status === "ok" && response.response) {
+          setLogs(response.response.entries || []);
+          setTotalPages(response.response.totalPages || 0);
+          setTotalEntries(response.response.totalEntries || 0);
+          setError(null);
+        } else {
+          throw new Error(response.errorMessage || "Failed to load logs");
+        }
+      } catch (err) {
+        if (seq !== fetchSeq.current) return;
+        console.error("Failed to fetch query logs:", err);
+        const errorMsg = err instanceof Error ? err.message : "Unknown error";
+        if (background) {
+          // Keep the current rows on screen and stop tailing with a single
+          // toast instead of spamming one per failed poll.
+          setIsLive(false);
+          toast.error(`Live tail stopped: ${errorMsg}`);
+          return;
+        }
+        if (errorMsg.includes("not found")) {
+          setError(
+            "The selected query logger app was not found or has been uninstalled. Please select a different query logger.",
+          );
+        } else if (errorMsg.includes("404")) {
+          setError(
+            "Query logging may not be enabled on this DNS server. Please check your server settings.",
+          );
+        } else {
+          setError(`Failed to load query logs: ${errorMsg}`);
+        }
+        setLogs([]);
+        setTotalPages(0);
+        setTotalEntries(0);
+      } finally {
+        if (seq === fetchSeq.current) {
+          fetchInFlight.current = false;
+        }
+        if (!background) {
+          setLoading(false);
+        }
+      }
+    },
+    [
+      selectedLogger,
+      pageNumber,
+      entriesPerPage,
+      clientIpAddress,
+      protocol,
+      responseType,
+      rcode,
+      qname,
+      qtype,
+    ],
+  );
 
   // Fetch logs when dependencies change
   useEffect(() => {
     if (!selectedLogger || loadingLoggers) return;
     fetchLogs();
   }, [fetchLogs, loadingLoggers, selectedLogger]);
+
+  // Keep a ref to the latest fetchLogs so the live-tail interval always polls
+  // with the current filters without restarting on every filter change.
+  const fetchLogsRef = useRef(fetchLogs);
+  useEffect(() => {
+    fetchLogsRef.current = fetchLogs;
+  }, [fetchLogs]);
+
+  // Live tail: poll every 3s while enabled, pausing while the tab is hidden
+  // and stopping on unmount.
+  useEffect(() => {
+    if (!isLive || !selectedLogger || loadingLoggers) return;
+
+    let intervalId: number | null = null;
+
+    const poll = () => fetchLogsRef.current({ background: true });
+    const startPolling = () => {
+      if (intervalId === null) {
+        intervalId = window.setInterval(poll, 3000);
+      }
+    };
+    const stopPolling = () => {
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        poll();
+        startPolling();
+      }
+    };
+
+    if (!document.hidden) {
+      poll();
+      startPolling();
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isLive, selectedLogger, loadingLoggers]);
+
+  const toggleLive = () => {
+    if (!isLive) {
+      // Live tail always follows the newest entries
+      setPageNumber(1);
+    }
+    setIsLive(!isLive);
+  };
 
   const handleSearch = () => {
     setPageNumber(1);
@@ -194,6 +291,62 @@ export default function QueryLogs() {
       )
       .join("\n");
     navigator.clipboard.writeText(text);
+  };
+
+  const handleExport = async () => {
+    if (!selectedLogger) return;
+
+    setExporting(true);
+    try {
+      // Parse selected logger: "AppName::ClassPath"
+      const [appName, classPath] = selectedLogger.split("::");
+
+      const { blob, filename } = await exportQueryLogs({
+        name: appName,
+        classPath: classPath,
+        clientIpAddress: clientIpAddress || undefined,
+        protocol: protocol && protocol !== "all" ? protocol : undefined,
+        responseType:
+          responseType && responseType !== "all" ? responseType : undefined,
+        rcode: rcode || undefined,
+        qname: qname || undefined,
+        qtype: qtype || undefined,
+      });
+      saveBlob(blob, filename);
+    } catch (err) {
+      console.error("Failed to export query logs:", err);
+      const errorMsg = err instanceof Error ? err.message : "Unknown error";
+      toast.error(`Failed to export query logs: ${errorMsg}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleZoneAction = async (
+    action: "block" | "allow",
+    domain: string,
+  ) => {
+    const zoneLabel = action === "block" ? "blocked" : "allowed";
+    setPendingZoneAction(`${action}:${domain}`);
+    try {
+      const response =
+        action === "block"
+          ? await addBlockedZone(domain)
+          : await addAllowedZone(domain);
+      if (response.status === "ok") {
+        toast.success(`${domain} added to ${zoneLabel} zones`);
+      } else {
+        toast.error(
+          response.errorMessage ||
+            `Failed to add ${domain} to ${zoneLabel} zones`,
+        );
+      }
+    } catch (err) {
+      console.error(`Failed to add ${domain} to ${zoneLabel} zones:`, err);
+      toast.error(`Failed to add ${domain} to ${zoneLabel} zones`);
+    } finally {
+      setPendingZoneAction(null);
+    }
   };
 
   const filteredLogs = logs.filter((log) => {
@@ -236,6 +389,40 @@ export default function QueryLogs() {
     };
     return (
       badges[type as keyof typeof badges] || "bg-muted text-muted-foreground"
+    );
+  };
+
+  const isBlockedResponseType = (type: string) =>
+    type === "Blocked" || type === "UpstreamBlocked" || type === "CacheBlocked";
+
+  // Per-row block/allow shortcuts; hidden for entries without a domain
+  const renderZoneActions = (log: QueryLogEntry, className?: string) => {
+    if (!log.qname) return null;
+    return (
+      <div className={cn("flex items-center gap-0.5", className)}>
+        {!isBlockedResponseType(log.responseType) && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => handleZoneAction("block", log.qname)}
+            disabled={pendingZoneAction === `block:${log.qname}`}
+            className="h-6 w-6 text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+            title={`Block ${log.qname}`}
+          >
+            <ShieldBan className="h-3.5 w-3.5" />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => handleZoneAction("allow", log.qname)}
+          disabled={pendingZoneAction === `allow:${log.qname}`}
+          className="h-6 w-6 text-muted-foreground hover:text-green-600 dark:hover:text-green-400"
+          title={`Allow ${log.qname}`}
+        >
+          <ShieldCheck className="h-3.5 w-3.5" />
+        </Button>
+      </div>
     );
   };
 
@@ -347,20 +534,43 @@ export default function QueryLogs() {
                 </div>
               )}
             </div>
-            <Button
-              variant={hasActiveFilters ? "default" : "outline"}
-              size="sm"
-              onClick={() => setShowFilters(!showFilters)}
-              className="h-8 gap-1.5"
-            >
-              <Filter
-                className={cn(
-                  "h-3.5 w-3.5",
-                  hasActiveFilters && "fill-current",
+            <div className="flex items-center gap-2">
+              <Button
+                variant={isLive ? "default" : "outline"}
+                size="sm"
+                onClick={toggleLive}
+                disabled={!selectedLogger}
+                className="h-8 gap-1.5"
+                title={isLive ? "Pause live tail" : "Follow new queries live"}
+              >
+                {isLive ? (
+                  <Pause className="h-3.5 w-3.5" />
+                ) : (
+                  <Play className="h-3.5 w-3.5" />
                 )}
-              />
-              <span className="hidden sm:inline">Filters</span>
-            </Button>
+                <span className="hidden sm:inline">Live</span>
+                {isLive && (
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
+                  </span>
+                )}
+              </Button>
+              <Button
+                variant={hasActiveFilters ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowFilters(!showFilters)}
+                className="h-8 gap-1.5"
+              >
+                <Filter
+                  className={cn(
+                    "h-3.5 w-3.5",
+                    hasActiveFilters && "fill-current",
+                  )}
+                />
+                <span className="hidden sm:inline">Filters</span>
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -584,6 +794,7 @@ export default function QueryLogs() {
                       <span className="text-xs text-muted-foreground">
                         {log.protocol.toUpperCase()}
                       </span>
+                      {renderZoneActions(log, "ml-auto")}
                     </div>
                     {log.answer && (
                       <div className="flex flex-wrap gap-1">
@@ -638,13 +849,16 @@ export default function QueryLogs() {
                     <th className="text-left py-2 px-3 font-medium text-muted-foreground whitespace-nowrap">
                       Answer
                     </th>
+                    <th className="py-2 px-3 w-px">
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {filteredLogs.map((log, index) => (
                     <tr
                       key={`${log.rowNumber}-${index}`}
-                      className="hover:bg-muted/50 transition-colors"
+                      className="group hover:bg-muted/50 transition-colors"
                     >
                       <td className="py-2 px-3 font-mono text-xs whitespace-nowrap">
                         {formatTimestamp(log.timestamp)}
@@ -708,6 +922,12 @@ export default function QueryLogs() {
                           <span className="text-muted-foreground">-</span>
                         )}
                       </td>
+                      <td className="py-2 px-3">
+                        {renderZoneActions(
+                          log,
+                          "justify-end opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity",
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -753,7 +973,7 @@ export default function QueryLogs() {
                 variant="outline"
                 size="sm"
                 onClick={() => setPageNumber(1)}
-                disabled={pageNumber === 1 || loading}
+                disabled={pageNumber === 1 || loading || isLive}
                 className="h-8 px-2 sm:px-3"
               >
                 <span className="sr-only sm:not-sr-only">First</span>
@@ -763,7 +983,7 @@ export default function QueryLogs() {
                 variant="outline"
                 size="sm"
                 onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
-                disabled={pageNumber === 1 || loading}
+                disabled={pageNumber === 1 || loading || isLive}
                 className="h-8 px-2 sm:px-3"
               >
                 <span className="sr-only sm:not-sr-only">Prev</span>
@@ -778,7 +998,7 @@ export default function QueryLogs() {
                 onClick={() =>
                   setPageNumber((p) => Math.min(totalPages, p + 1))
                 }
-                disabled={pageNumber === totalPages || loading}
+                disabled={pageNumber === totalPages || loading || isLive}
                 className="h-8 px-2 sm:px-3"
               >
                 <span className="sr-only sm:not-sr-only">Next</span>
@@ -788,7 +1008,7 @@ export default function QueryLogs() {
                 variant="outline"
                 size="sm"
                 onClick={() => setPageNumber(totalPages)}
-                disabled={pageNumber === totalPages || loading}
+                disabled={pageNumber === totalPages || loading || isLive}
                 className="h-8 px-2 sm:px-3"
               >
                 <span className="sr-only sm:not-sr-only">Last</span>
@@ -804,8 +1024,18 @@ export default function QueryLogs() {
                   <Copy className="h-3.5 w-3.5" />
                   <span className="hidden lg:inline">Copy</span>
                 </Button>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5">
-                  <Download className="h-3.5 w-3.5" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExport}
+                  disabled={!selectedLogger || exporting}
+                  className="h-8 gap-1.5"
+                >
+                  {exporting ? (
+                    <IsotopeSpinner size="sm" className="size-3.5" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
                   <span className="hidden lg:inline">Export</span>
                 </Button>
               </div>

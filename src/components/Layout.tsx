@@ -1,6 +1,7 @@
 import { Outlet } from "react-router";
 import { Menu } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
+import { CommandPalette } from "@/components/CommandPalette";
 import { Button } from "@/components/ui/button";
 import {
   SidebarInset,
@@ -47,6 +48,7 @@ export default function Layout() {
     <SidebarProvider defaultOpen={getSidebarDefault()}>
       <AppSidebar />
       <LayoutContent />
+      <CommandPalette />
     </SidebarProvider>
   );
 }

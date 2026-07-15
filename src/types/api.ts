@@ -136,6 +136,73 @@ export interface UpdateCheckResult {
 
 export interface ZoneListResponse {
   zones: Zone[];
+  // Present only when the request asked for paginated results.
+  pageNumber?: number;
+  totalPages?: number;
+  totalZones?: number;
+}
+
+// Response of /zones/options/get. Which fields are present depends on the
+// zone type (e.g. primaryNameServerAddresses only for Secondary/Stub kinds).
+export interface ZoneOptions {
+  name: string;
+  type: Zone['type'];
+  internal: boolean;
+  dnssecStatus: string;
+  disabled: boolean;
+  notifyFailed?: boolean;
+  notifyFailedFor?: string[];
+  catalog?: string;
+  overrideCatalogQueryAccess?: boolean;
+  overrideCatalogZoneTransfer?: boolean;
+  overrideCatalogNotify?: boolean;
+  primaryNameServerAddresses?: string[];
+  primaryZoneTransferProtocol?: 'Tcp' | 'Tls' | 'Quic';
+  primaryZoneTransferTsigKeyName?: string;
+  validateZone?: boolean;
+  queryAccess?: string;
+  queryAccessNetworkACL?: string[];
+  zoneTransfer?: string;
+  zoneTransferNetworkACL?: string[];
+  zoneTransferTsigKeyNames?: string[];
+  notify?: string;
+  notifyNameServers?: string[];
+  notifySecondaryCatalogsNameServers?: string[];
+  update?: string;
+  updateNetworkACL?: string[];
+  updateSecurityPolicies?: UpdateSecurityPolicy[];
+  availableCatalogZoneNames?: string[];
+  availableTsigKeyNames?: string[];
+}
+
+export interface UpdateSecurityPolicy {
+  tsigKeyName: string;
+  domain: string;
+  allowedTypes: string[];
+}
+
+export interface ZoneUserPermission {
+  username: string;
+  canView: boolean;
+  canModify: boolean;
+  canDelete: boolean;
+}
+
+export interface ZoneGroupPermission {
+  name: string;
+  canView: boolean;
+  canModify: boolean;
+  canDelete: boolean;
+}
+
+export interface ZonePermissions {
+  section: string;
+  subItem: string;
+  userPermissions: ZoneUserPermission[];
+  groupPermissions: ZoneGroupPermission[];
+  // Present when includeUsersAndGroups=true.
+  users?: string[];
+  groups?: string[];
 }
 
 export interface RecordListResponse {
