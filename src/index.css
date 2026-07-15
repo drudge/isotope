@@ -169,13 +169,10 @@
   }
 }
 
-/* Native date/time picker button. Moving it to the leading edge needs absolute
-   positioning; its colour tracks the theme via `color-scheme` on :root/.dark. */
+/* datetime-local ships its own picker button on the field's trailing edge, and
+   engines disagree about whether it can be repositioned — Blink honours
+   `position: absolute` on it, WebKit ignores it and leaves the button put. So
+   hide it outright; DateTimeField draws the affordance on the leading edge. */
 .datetime-field::-webkit-calendar-picker-indicator {
-  position: absolute;
-  left: 0.5rem;
-  top: 0;
-  bottom: 0;
-  margin: auto 0;
-  cursor: pointer;
+  display: none;
 }

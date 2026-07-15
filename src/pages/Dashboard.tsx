@@ -34,7 +34,7 @@ import { toast } from "sonner";
 import { getStats, type StatsType } from "@/api/dns";
 import type { ApiResponse } from "@/types/api";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar, ChevronDown, ChevronUp } from "lucide-react";
 import QueryLogsModal from "@/components/QueryLogsModal";
 
 // Stat box component matching Technitium's colored boxes
@@ -238,6 +238,67 @@ function calculatePercentage(value: number, total: number): string {
 function toDateTimeLocalValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+// A datetime-local field with the calendar affordance on the leading edge. The
+// browser's own button sits on the trailing edge and can't be moved portably,
+// so `.datetime-field` hides it and this draws a themed icon in its place.
+function DateTimeField({
+  id,
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  min?: string;
+  max?: string;
+  onChange: (value: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const openPicker = () => {
+    const input = inputRef.current;
+    if (!input) return;
+    try {
+      input.showPicker();
+    } catch {
+      // Older browsers refuse showPicker; typing into the field still works.
+      input.focus();
+    }
+  };
+
+  return (
+    <div className="grid gap-1.5">
+      <Label htmlFor={id} className="text-xs text-muted-foreground">
+        {label}
+      </Label>
+      <div className="relative">
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={`Choose ${label.toLowerCase()} date and time`}
+          onClick={openPicker}
+          className="absolute top-1/2 left-2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Calendar className="size-3.5" />
+        </button>
+        <Input
+          ref={inputRef}
+          id={id}
+          type="datetime-local"
+          value={value}
+          min={min}
+          max={max}
+          onChange={(e) => onChange(e.target.value)}
+          className="datetime-field h-8 w-full pl-8 text-xs"
+        />
+      </div>
+    </div>
+  );
 }
 
 export default function Dashboard() {
@@ -687,7 +748,7 @@ export default function Dashboard() {
                 </Tabs>
                 <PopoverContent
                   align="end"
-                  className="w-auto p-3"
+                  className="w-[260px] p-3"
                   onInteractOutside={(event) => {
                     // The Custom tab toggles the popover itself. Without this,
                     // dismiss-on-outside-press would close it a beat before that
@@ -698,38 +759,20 @@ export default function Dashboard() {
                   }}
                 >
                   <div className="grid gap-3">
-                    <div className="grid gap-1.5">
-                      <Label
-                        htmlFor="custom-range-start"
-                        className="text-xs text-muted-foreground"
-                      >
-                        From
-                      </Label>
-                      <Input
-                        id="custom-range-start"
-                        type="datetime-local"
-                        value={customStart}
-                        max={customEnd || undefined}
-                        onChange={(e) => setCustomStart(e.target.value)}
-                        className="datetime-field relative h-8 w-[205px] pl-8 text-xs"
-                      />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label
-                        htmlFor="custom-range-end"
-                        className="text-xs text-muted-foreground"
-                      >
-                        To
-                      </Label>
-                      <Input
-                        id="custom-range-end"
-                        type="datetime-local"
-                        value={customEnd}
-                        min={customStart || undefined}
-                        onChange={(e) => setCustomEnd(e.target.value)}
-                        className="datetime-field relative h-8 w-[205px] pl-8 text-xs"
-                      />
-                    </div>
+                    <DateTimeField
+                      id="custom-range-start"
+                      label="From"
+                      value={customStart}
+                      max={customEnd || undefined}
+                      onChange={setCustomStart}
+                    />
+                    <DateTimeField
+                      id="custom-range-end"
+                      label="To"
+                      value={customEnd}
+                      min={customStart || undefined}
+                      onChange={setCustomEnd}
+                    />
                     <Button
                       size="sm"
                       className="h-8 w-full"
