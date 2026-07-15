@@ -44,6 +44,9 @@
 }
 
 :root {
+  /* Tells the browser which palette to paint native widgets with (date picker
+     indicators, spinners, scrollbars). Without it they render light-on-light. */
+  color-scheme: light;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -79,6 +82,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -163,4 +167,15 @@
   .animate-nucleus-pulse {
     animation: none !important;
   }
+}
+
+/* Native date/time picker button. Moving it to the leading edge needs absolute
+   positioning; its colour tracks the theme via `color-scheme` on :root/.dark. */
+.datetime-field::-webkit-calendar-picker-indicator {
+  position: absolute;
+  left: 0.5rem;
+  top: 0;
+  bottom: 0;
+  margin: auto 0;
+  cursor: pointer;
 }

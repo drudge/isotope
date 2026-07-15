@@ -23,6 +23,11 @@ import type { ChartConfig } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -245,6 +250,8 @@ export default function Dashboard() {
     start: string;
     end: string;
   } | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  const customTabRef = useRef<HTMLButtonElement>(null);
   const [autoRefresh, setAutoRefresh] = useState(
     () => localStorage.getItem(AUTO_REFRESH_STORAGE_KEY) === "true",
   );
@@ -269,7 +276,6 @@ export default function Dashboard() {
   // silent fetches (live auto-refresh) keep the previous data on screen.
   const fetchStats = useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
-      if (timeRange === "Custom" && !appliedCustomRange) return;
       // Background polls never stack on top of an in-flight request
       if (silent && fetchInFlightRef.current) return;
       const seq = ++fetchSeqRef.current;
@@ -358,13 +364,19 @@ export default function Dashboard() {
 
   const handleTimeRangeChange = (value: string) => {
     const range = value as TimeRange;
-    if (range === "Custom" && !customStart && !customEnd) {
-      // Default the pickers to the last 24 hours on first reveal
+    // Selecting Custom for the first time falls back to the last 24 hours, so
+    // the tab never sits active over another range's data while it waits for
+    // an Apply that may never come.
+    if (range === "Custom" && !appliedCustomRange) {
       const now = new Date();
-      setCustomStart(
-        toDateTimeLocalValue(new Date(now.getTime() - 24 * 60 * 60 * 1000)),
-      );
+      now.setSeconds(0, 0);
+      const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      setCustomStart(toDateTimeLocalValue(start));
       setCustomEnd(toDateTimeLocalValue(now));
+      setAppliedCustomRange({
+        start: start.toISOString(),
+        end: now.toISOString(),
+      });
     }
     setTimeRange(range);
   };
@@ -388,6 +400,7 @@ export default function Dashboard() {
       start: start.toISOString(),
       end: end.toISOString(),
     });
+    setCustomOpen(false);
   };
 
   const isCustomRange = timeRange === "Custom";
@@ -582,7 +595,7 @@ export default function Dashboard() {
 
       {/* Main Line Chart */}
       <Card>
-        <CardHeader className="pb-3 space-y-3">
+        <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-base font-semibold">
               Query Statistics
@@ -625,81 +638,110 @@ export default function Dashboard() {
                   Live
                 </Button>
               </span>
-              <Tabs value={timeRange} onValueChange={handleTimeRangeChange}>
-                <TabsList className="h-8 sm:h-9 w-full sm:w-auto grid grid-cols-6 sm:flex">
-                  <TabsTrigger
-                    value="LastHour"
-                    className="text-xs px-2 sm:px-3"
-                  >
-                    Hour
-                  </TabsTrigger>
-                  <TabsTrigger value="LastDay" className="text-xs px-2 sm:px-3">
-                    Day
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="LastWeek"
-                    className="text-xs px-2 sm:px-3"
-                  >
-                    Week
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="LastMonth"
-                    className="text-xs px-2 sm:px-3"
-                  >
-                    Month
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="LastYear"
-                    className="text-xs px-2 sm:px-3"
-                  >
-                    Year
-                  </TabsTrigger>
-                  <TabsTrigger value="Custom" className="text-xs px-2 sm:px-3">
-                    Custom
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <Popover open={customOpen} onOpenChange={setCustomOpen}>
+                <Tabs value={timeRange} onValueChange={handleTimeRangeChange}>
+                  <PopoverAnchor asChild>
+                    <TabsList className="h-8 sm:h-9 w-full sm:w-auto grid grid-cols-6 sm:flex">
+                      <TabsTrigger
+                        value="LastHour"
+                        className="text-xs px-2 sm:px-3"
+                      >
+                        Hour
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="LastDay"
+                        className="text-xs px-2 sm:px-3"
+                      >
+                        Day
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="LastWeek"
+                        className="text-xs px-2 sm:px-3"
+                      >
+                        Week
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="LastMonth"
+                        className="text-xs px-2 sm:px-3"
+                      >
+                        Month
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="LastYear"
+                        className="text-xs px-2 sm:px-3"
+                      >
+                        Year
+                      </TabsTrigger>
+                      <TabsTrigger
+                        ref={customTabRef}
+                        value="Custom"
+                        aria-haspopup="dialog"
+                        aria-expanded={customOpen}
+                        onClick={() => setCustomOpen((open) => !open)}
+                        className="text-xs px-2 sm:px-3"
+                      >
+                        Custom
+                      </TabsTrigger>
+                    </TabsList>
+                  </PopoverAnchor>
+                </Tabs>
+                <PopoverContent
+                  align="end"
+                  className="w-auto p-3"
+                  onInteractOutside={(event) => {
+                    // The Custom tab toggles the popover itself. Without this,
+                    // dismiss-on-outside-press would close it a beat before that
+                    // click reopened it, so it could never be closed from the tab.
+                    if (customTabRef.current?.contains(event.target as Node)) {
+                      event.preventDefault();
+                    }
+                  }}
+                >
+                  <div className="grid gap-3">
+                    <div className="grid gap-1.5">
+                      <Label
+                        htmlFor="custom-range-start"
+                        className="text-xs text-muted-foreground"
+                      >
+                        From
+                      </Label>
+                      <Input
+                        id="custom-range-start"
+                        type="datetime-local"
+                        value={customStart}
+                        max={customEnd || undefined}
+                        onChange={(e) => setCustomStart(e.target.value)}
+                        className="datetime-field relative h-8 w-[205px] pl-8 text-xs"
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label
+                        htmlFor="custom-range-end"
+                        className="text-xs text-muted-foreground"
+                      >
+                        To
+                      </Label>
+                      <Input
+                        id="custom-range-end"
+                        type="datetime-local"
+                        value={customEnd}
+                        min={customStart || undefined}
+                        onChange={(e) => setCustomEnd(e.target.value)}
+                        className="datetime-field relative h-8 w-[205px] pl-8 text-xs"
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      className="h-8 w-full"
+                      onClick={applyCustomRange}
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
-          {isCustomRange && (
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-end gap-2 sm:gap-3">
-              <div className="grid gap-1.5">
-                <Label
-                  htmlFor="custom-range-start"
-                  className="text-xs text-muted-foreground"
-                >
-                  From
-                </Label>
-                <Input
-                  id="custom-range-start"
-                  type="datetime-local"
-                  value={customStart}
-                  max={customEnd || undefined}
-                  onChange={(e) => setCustomStart(e.target.value)}
-                  className="h-8 w-full sm:w-[205px] text-xs"
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label
-                  htmlFor="custom-range-end"
-                  className="text-xs text-muted-foreground"
-                >
-                  To
-                </Label>
-                <Input
-                  id="custom-range-end"
-                  type="datetime-local"
-                  value={customEnd}
-                  min={customStart || undefined}
-                  onChange={(e) => setCustomEnd(e.target.value)}
-                  className="h-8 w-full sm:w-[205px] text-xs"
-                />
-              </div>
-              <Button size="sm" className="h-8" onClick={applyCustomRange}>
-                Apply
-              </Button>
-            </div>
-          )}
         </CardHeader>
         <CardContent>
           {statsLoading ? (
