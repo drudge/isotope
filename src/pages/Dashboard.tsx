@@ -28,13 +28,16 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { format } from "date-fns";
+import type { DateRange } from "react-day-picker";
 import { getStats, type StatsType } from "@/api/dns";
 import type { ApiResponse } from "@/types/api";
 import { cn } from "@/lib/utils";
-import { Calendar, ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import QueryLogsModal from "@/components/QueryLogsModal";
 
 // Stat box component matching Technitium's colored boxes
@@ -240,63 +243,111 @@ function toDateTimeLocalValue(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-// A datetime-local field with the calendar affordance on the leading edge. The
-// browser's own button sits on the trailing edge and can't be moved portably,
-// so `.datetime-field` hides it and this draws a themed icon in its place.
-function DateTimeField({
-  id,
-  label,
-  value,
-  min,
-  max,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  min?: string;
-  max?: string;
-  onChange: (value: string) => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
+function parseDateTimeLocal(value: string): Date | undefined {
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
 
-  const openPicker = () => {
-    const input = inputRef.current;
-    if (!input) return;
-    try {
-      input.showPicker();
-    } catch {
-      // Older browsers refuse showPicker; typing into the field still works.
-      input.focus();
-    }
+// The custom-range popover body: one range calendar (click the start day, then
+// the end day) with the From/To times and Apply beneath it. Replaces the
+// <input type="datetime-local"> fields, whose engine-drawn picker buttons
+// can't be hidden in Firefox. Values stay in datetime-local string form
+// ("YYYY-MM-DDTHH:mm") so callers are unchanged.
+function CustomRangeFields({
+  start,
+  end,
+  onStartChange,
+  onEndChange,
+  onApply,
+}: {
+  start: string;
+  end: string;
+  onStartChange: (value: string) => void;
+  onEndChange: (value: string) => void;
+  onApply: () => void;
+}) {
+  const startDate = parseDateTimeLocal(start);
+  const range: DateRange | undefined = startDate
+    ? { from: startDate, to: parseDateTimeLocal(end) }
+    : undefined;
+
+  const handleRangeSelect = (next: DateRange | undefined) => {
+    // Re-clicking the range start reports undefined; keep the current value.
+    if (!next?.from) return;
+    onStartChange(
+      `${format(next.from, "yyyy-MM-dd")}T${start.slice(11, 16) || "00:00"}`,
+    );
+    // While only the start of a new range is picked, mirror it into To so the
+    // pair always holds a complete, applyable range.
+    onEndChange(
+      `${format(next.to ?? next.from, "yyyy-MM-dd")}T${end.slice(11, 16) || "00:00"}`,
+    );
   };
 
+  const handleTimeChange = (
+    value: string,
+    time: string,
+    onChange: (next: string) => void,
+  ) => {
+    if (!time) return; // mid-edit clear; the field snaps back on re-render
+    onChange(`${value.slice(0, 10)}T${time}`);
+  };
+
+  // Bounds for the month/year dropdowns: stats only exist in the past, and a
+  // decade outlives any realistic Technitium install's history.
+  const endMonth = new Date();
+  const startMonth = new Date(endMonth.getFullYear() - 10, 0);
+
   return (
-    <div className="grid gap-1.5">
-      <Label htmlFor={id} className="text-xs text-muted-foreground">
-        {label}
-      </Label>
-      <div className="relative">
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-label={`Choose ${label.toLowerCase()} date and time`}
-          onClick={openPicker}
-          className="absolute top-1/2 left-2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <Calendar className="size-3.5" />
-        </button>
-        <Input
-          ref={inputRef}
-          id={id}
-          type="datetime-local"
-          value={value}
-          min={min}
-          max={max}
-          onChange={(e) => onChange(e.target.value)}
-          className="datetime-field h-8 w-full pl-8 text-xs"
-        />
+    <div className="grid gap-3">
+      <Calendar
+        mode="range"
+        selected={range}
+        onSelect={handleRangeSelect}
+        defaultMonth={range?.from}
+        captionLayout="dropdown"
+        startMonth={startMonth}
+        endMonth={endMonth}
+        className="p-0"
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <div className="grid gap-1.5">
+          <Label
+            htmlFor="custom-range-start-time"
+            className="text-xs text-muted-foreground"
+          >
+            From
+          </Label>
+          <Input
+            id="custom-range-start-time"
+            type="time"
+            value={start.slice(11, 16)}
+            onChange={(e) =>
+              handleTimeChange(start, e.target.value, onStartChange)
+            }
+            className="time-field h-8 text-xs"
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label
+            htmlFor="custom-range-end-time"
+            className="text-xs text-muted-foreground"
+          >
+            To
+          </Label>
+          <Input
+            id="custom-range-end-time"
+            type="time"
+            value={end.slice(11, 16)}
+            onChange={(e) => handleTimeChange(end, e.target.value, onEndChange)}
+            className="time-field h-8 text-xs"
+          />
+        </div>
       </div>
+      <Button size="sm" className="h-8 w-full" onClick={onApply}>
+        Apply
+      </Button>
     </div>
   );
 }
@@ -425,13 +476,14 @@ export default function Dashboard() {
 
   const handleTimeRangeChange = (value: string) => {
     const range = value as TimeRange;
-    // Selecting Custom for the first time falls back to the last 24 hours, so
-    // the tab never sits active over another range's data while it waits for
-    // an Apply that may never come.
+    // Selecting Custom for the first time falls back to the last week, so the
+    // tab never sits active over another range's data while it waits for an
+    // Apply that may never come. A week also reads as a proper band on the
+    // range calendar, where a single day is just two adjacent filled cells.
     if (range === "Custom" && !appliedCustomRange) {
       const now = new Date();
       now.setSeconds(0, 0);
-      const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       setCustomStart(toDateTimeLocalValue(start));
       setCustomEnd(toDateTimeLocalValue(now));
       setAppliedCustomRange({
@@ -748,7 +800,7 @@ export default function Dashboard() {
                 </Tabs>
                 <PopoverContent
                   align="end"
-                  className="w-[260px] p-3"
+                  className="w-auto p-3"
                   onInteractOutside={(event) => {
                     // The Custom tab toggles the popover itself. Without this,
                     // dismiss-on-outside-press would close it a beat before that
@@ -758,29 +810,13 @@ export default function Dashboard() {
                     }
                   }}
                 >
-                  <div className="grid gap-3">
-                    <DateTimeField
-                      id="custom-range-start"
-                      label="From"
-                      value={customStart}
-                      max={customEnd || undefined}
-                      onChange={setCustomStart}
-                    />
-                    <DateTimeField
-                      id="custom-range-end"
-                      label="To"
-                      value={customEnd}
-                      min={customStart || undefined}
-                      onChange={setCustomEnd}
-                    />
-                    <Button
-                      size="sm"
-                      className="h-8 w-full"
-                      onClick={applyCustomRange}
-                    >
-                      Apply
-                    </Button>
-                  </div>
+                  <CustomRangeFields
+                    start={customStart}
+                    end={customEnd}
+                    onStartChange={setCustomStart}
+                    onEndChange={setCustomEnd}
+                    onApply={applyCustomRange}
+                  />
                 </PopoverContent>
               </Popover>
             </div>
