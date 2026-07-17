@@ -169,10 +169,8 @@
   }
 }
 
-/* datetime-local ships its own picker button on the field's trailing edge, and
-   engines disagree about whether it can be repositioned — Blink honours
-   `position: absolute` on it, WebKit ignores it and leaves the button put. So
-   hide it outright; DateTimeField draws the affordance on the leading edge. */
-.datetime-field::-webkit-calendar-picker-indicator {
+/* Chrome draws its own clock button on time inputs; the calendar popover is
+   the picking affordance, so hide it. (Firefox draws none to begin with.) */
+.time-field::-webkit-calendar-picker-indicator {
   display: none;
 }
