@@ -476,13 +476,14 @@ export default function Dashboard() {
 
   const handleTimeRangeChange = (value: string) => {
     const range = value as TimeRange;
-    // Selecting Custom for the first time falls back to the last 24 hours, so
-    // the tab never sits active over another range's data while it waits for
-    // an Apply that may never come.
+    // Selecting Custom for the first time falls back to the last week, so the
+    // tab never sits active over another range's data while it waits for an
+    // Apply that may never come. A week also reads as a proper band on the
+    // range calendar, where a single day is just two adjacent filled cells.
     if (range === "Custom" && !appliedCustomRange) {
       const now = new Date();
       now.setSeconds(0, 0);
-      const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       setCustomStart(toDateTimeLocalValue(start));
       setCustomEnd(toDateTimeLocalValue(now));
       setAppliedCustomRange({
