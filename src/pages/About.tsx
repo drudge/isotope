@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useApi } from "@/hooks/useApi";
 import { getServerInfo } from "@/api/dns";
@@ -11,6 +12,22 @@ export default function About() {
   const { data: serverInfo } = useApi(() => getServerInfo(), []);
   const { update, isUpdateAvailable, error, isLoading, refresh } =
     useUpdateCheck();
+  const [isChecking, setIsChecking] = useState(false);
+  const checking = isChecking || isLoading;
+
+  // The server answers checkForUpdate from cache in tens of milliseconds, so
+  // hold the checking state long enough for the spinner to be perceptible.
+  const handleCheckNow = async () => {
+    setIsChecking(true);
+    try {
+      await Promise.all([
+        refresh(),
+        new Promise((resolve) => setTimeout(resolve, 750)),
+      ]);
+    } finally {
+      setIsChecking(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -153,21 +170,25 @@ export default function About() {
                     <ArrowUpCircle className="h-3 w-3" />
                     v{update.updateVersion} available
                   </span>
-                ) : !isLoading && !error ? (
+                ) : checking ? null : error ? (
+                  <span className="text-xs text-destructive" title={error}>
+                    Update check failed
+                  </span>
+                ) : (
                   <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     Up to date
                   </span>
-                ) : null}
+                )}
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => refresh()}
-                disabled={isLoading}
+                onClick={handleCheckNow}
+                disabled={checking}
               >
-                <RefreshCw className={isLoading ? "animate-spin" : ""} />
-                Check now
+                <RefreshCw className={checking ? "animate-spin" : ""} />
+                {checking ? "Checking…" : "Check now"}
               </Button>
             </div>
 

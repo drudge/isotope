@@ -32,6 +32,8 @@ export default defineConfig({
     },
   },
   server: {
+    // Honor the port assigned by the Claude Code preview harness (autoPort).
+    port: process.env.PORT ? Number(process.env.PORT) : undefined,
     proxy: {
       '/api': {
         target: 'https://dns.penree.net',
