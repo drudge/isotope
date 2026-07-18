@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Search,
   Copy,
@@ -30,12 +30,25 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { CopyableText } from '@/components/ui/copyable-text';
 import { resolveDns, type DnsQueryResult } from '@/api/dnsClient';
+import { getClusterState } from '@/api/cluster';
+import { useApi } from '@/hooks/useApi';
 import { toast } from 'sonner';
 
 const RECORD_TYPES = [
@@ -52,10 +65,16 @@ const COMMON_QUERIES: { label: string; type: string; icon: LucideIcon }[] = [
   { label: 'DNSSEC Keys', type: 'DNSKEY', icon: ShieldCheck },
 ];
 
-const PRESET_SERVERS = [
+// "This Server" resolves internally on the node the session is on. The other
+// cluster nodes are inserted between these local modes and the public resolvers
+// as explicit DNS targets, in Technitium's "name (ip)" server-address format.
+const LOCAL_SERVERS = [
   { value: 'this-server', label: 'This Server' },
   { value: 'recursive-resolver', label: 'Recursive Resolver' },
   { value: 'system-dns', label: 'System DNS' },
+];
+
+const PUBLIC_SERVERS = [
   { value: '1.1.1.1', label: 'Cloudflare (1.1.1.1)' },
   { value: '8.8.8.8', label: 'Google (8.8.8.8)' },
   { value: '9.9.9.9', label: 'Quad9 (9.9.9.9)' },
@@ -66,6 +85,13 @@ export default function DnsClient() {
   const [domain, setDomain] = useState('');
   const [recordType, setRecordType] = useState('A');
   const [server, setServer] = useState('this-server');
+  // Applied custom target, composed into Technitium's "name (ip)" format below.
+  const [customName, setCustomName] = useState('');
+  const [customIp, setCustomIp] = useState('');
+  // Dialog-local drafts so Cancel doesn't mutate the applied target.
+  const [customDialogOpen, setCustomDialogOpen] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [draftIp, setDraftIp] = useState('');
   const [protocol, setProtocol] = useState<'Udp' | 'Tcp' | 'Tls' | 'Https' | 'Quic'>('Udp');
   const [dnssec, setDnssec] = useState(false);
   const [ednsSubnet, setEdnsSubnet] = useState('');
@@ -74,9 +100,95 @@ export default function DnsClient() {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // "custom" is the sentinel select value for the user-defined target; the
+  // "__set_custom__" item is an action row that opens the editor dialog instead
+  // of becoming a selectable value.
+  const isCustom = server === 'custom';
+  const customServer =
+    customName.trim() && customIp.trim()
+      ? `${customName.trim()} (${customIp.trim()})`
+      : customIp.trim() || customName.trim();
+  const hasCustom = customServer.length > 0;
+
+  const handleServerChange = (value: string) => {
+    if (value === '__set_custom__') {
+      setDraftName(customName);
+      setDraftIp(customIp);
+      setCustomDialogOpen(true);
+      return;
+    }
+    setServer(value);
+  };
+
+  const applyCustom = () => {
+    if (!draftName.trim() && !draftIp.trim()) return;
+    setCustomName(draftName.trim());
+    setCustomIp(draftIp.trim());
+    setServer('custom');
+    setCustomDialogOpen(false);
+  };
+
+  // Other cluster nodes become selectable DNS targets. Fails quietly for
+  // non-clustered servers or users without cluster-view permission — the group
+  // simply doesn't render and the preset list is unchanged.
+  const { data: clusterState } = useApi(() => getClusterState(), []);
+  const clusterServers = useMemo(() => {
+    if (!clusterState?.clusterInitialized || !clusterState.clusterNodes) return [];
+    return clusterState.clusterNodes
+      .filter((node) => node.state !== 'Self')
+      .map((node) => {
+        const ip = node.ipAddresses?.[0];
+        const value = ip ? `${node.name} (${ip})` : node.name;
+        return { value, label: value };
+      });
+  }, [clusterState]);
+
+  // With cluster nodes present the list is sectioned, so the public resolvers
+  // get their own heading — otherwise they'd read as part of "Cluster Nodes".
+  // Single-server users keep the original flat, unlabeled list.
+  const hasClusterNodes = clusterServers.length > 0;
+  const serverOptions = (
+    <>
+      {LOCAL_SERVERS.map((s) => (
+        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+      ))}
+      {hasClusterNodes && (
+        <SelectGroup>
+          <SelectLabel>Cluster Nodes</SelectLabel>
+          {clusterServers.map((s) => (
+            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+          ))}
+        </SelectGroup>
+      )}
+      {hasClusterNodes ? (
+        <SelectGroup>
+          <SelectLabel>Public Resolvers</SelectLabel>
+          {PUBLIC_SERVERS.map((s) => (
+            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+          ))}
+        </SelectGroup>
+      ) : (
+        PUBLIC_SERVERS.map((s) => (
+          <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+        ))
+      )}
+      <SelectSeparator />
+      {hasCustom && <SelectItem value="custom">{customServer}</SelectItem>}
+      <SelectItem value="__set_custom__">
+        {hasCustom ? 'Edit custom server…' : 'Custom…'}
+      </SelectItem>
+    </>
+  );
+
   const handleQuery = async (typeOverride?: string) => {
     if (!domain.trim()) {
       setError('Please enter a domain name');
+      return;
+    }
+
+    const targetServer = isCustom ? customServer : server;
+    if (!targetServer) {
+      setError('Please set a custom server address');
       return;
     }
 
@@ -85,7 +197,7 @@ export default function DnsClient() {
     setError(null);
 
     const response = await resolveDns({
-      server,
+      server: targetServer,
       domain: domain.trim(),
       type: typeOverride || recordType,
       protocol,
@@ -407,16 +519,12 @@ export default function DnsClient() {
                 {/* Server */}
                 <div className="space-y-1.5">
                   <Label htmlFor="server-mobile" className="text-xs text-muted-foreground">Server</Label>
-                  <Select value={server} onValueChange={setServer}>
+                  <Select value={server} onValueChange={handleServerChange}>
                     <SelectTrigger id="server-mobile" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {PRESET_SERVERS.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.label}
-                        </SelectItem>
-                      ))}
+                      {serverOptions}
                     </SelectContent>
                   </Select>
                 </div>
@@ -509,16 +617,12 @@ export default function DnsClient() {
 
                 {/* Server + Protocol + EDNS + DNSSEC */}
                 <div className="flex gap-3 items-center flex-wrap">
-                  <Select value={server} onValueChange={setServer}>
+                  <Select value={server} onValueChange={handleServerChange}>
                     <SelectTrigger className="w-44">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {PRESET_SERVERS.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.label}
-                        </SelectItem>
-                      ))}
+                      {serverOptions}
                     </SelectContent>
                   </Select>
                   <Select value={protocol} onValueChange={(v: typeof protocol) => setProtocol(v)}>
@@ -826,6 +930,66 @@ export default function DnsClient() {
           </div>
         </div>
       </div>
+
+      <Dialog open={customDialogOpen} onOpenChange={setCustomDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Custom DNS Server</DialogTitle>
+            <DialogDescription>
+              Target a specific server by name, IP, or both. Providing both pins
+              the hostname to that IP — matching how cluster nodes are addressed,
+              and letting TLS/HTTPS/QUIC validate the certificate name.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="custom-name">
+                Name <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Input
+                id="custom-name"
+                placeholder="dns.example.com"
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && applyCustom()}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="custom-ip">
+                IP Address <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Input
+                id="custom-ip"
+                placeholder="10.0.7.22"
+                value={draftIp}
+                onChange={(e) => setDraftIp(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && applyCustom()}
+              />
+            </div>
+            {(draftName.trim() || draftIp.trim()) && (
+              <div className="rounded-md bg-muted px-3 py-2">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">
+                  Server address
+                </span>
+                <div className="font-mono text-sm break-all">
+                  {draftName.trim() && draftIp.trim()
+                    ? `${draftName.trim()} (${draftIp.trim()})`
+                    : draftIp.trim() || draftName.trim()}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCustomDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={applyCustom} disabled={!draftName.trim() && !draftIp.trim()}>
+              Use Server
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
