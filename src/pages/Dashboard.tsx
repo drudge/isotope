@@ -50,7 +50,7 @@ import type { DateRange } from "react-day-picker";
 import { getStats, type StatsType, type TopStatsType } from "@/api/dns";
 import type { ApiResponse } from "@/types/api";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import QueryLogsModal from "@/components/QueryLogsModal";
 import TopStatsDialog from "@/components/TopStatsDialog";
 
@@ -394,7 +394,6 @@ export default function Dashboard() {
   const [autoRefresh, setAutoRefresh] = useState(
     () => localStorage.getItem(AUTO_REFRESH_STORAGE_KEY) === "true",
   );
-  const [expandedLists, setExpandedLists] = useState(false);
   const [topStatsOpen, setTopStatsOpen] = useState<TopStatsType | null>(null);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [logsModalFilter, setLogsModalFilter] = useState<{
@@ -1008,46 +1007,6 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Zone Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-        <StatBox
-          label="Zones"
-          value={stats?.zones ?? 0}
-          color="bg-slate-600"
-          isLoading={statsLoading}
-        />
-        <StatBox
-          label="Cache"
-          value={formatNumber(stats?.cachedEntries ?? 0)}
-          color="bg-slate-600"
-          isLoading={statsLoading}
-        />
-        <StatBox
-          label="Allowed"
-          value={stats?.allowedZones ?? 0}
-          color="bg-slate-600"
-          isLoading={statsLoading}
-        />
-        <StatBox
-          label="Blocked"
-          value={stats?.blockedZones ?? 0}
-          color="bg-slate-600"
-          isLoading={statsLoading}
-        />
-        <StatBox
-          label="Allow List"
-          value={stats?.allowedZones ?? 0}
-          color="bg-slate-600"
-          isLoading={statsLoading}
-        />
-        <StatBox
-          label="Block List"
-          value={formatNumber(stats?.blockListZones ?? 0)}
-          color="bg-slate-600"
-          isLoading={statsLoading}
-        />
-      </div>
-
       {/* Three column layout: Top Clients, Top Domains, Top Blocked Domains */}
       <div
         className={cn(
@@ -1099,7 +1058,7 @@ export default function Dashboard() {
                 <>
                   <div className="divide-y flex-1">
                     {topClientsData
-                      .slice(0, expandedLists ? 10 : 5)
+                      .slice(0, 5)
                       .map((client) => (
                         <div
                           key={client.name}
@@ -1127,28 +1086,6 @@ export default function Dashboard() {
                         </div>
                       ))}
                   </div>
-                  {(topClientsData.length > 5 ||
-                    topDomainsData.length > 5 ||
-                    topBlockedDomainsData.length > 5) && (
-                    <div className="flex items-center justify-center pt-2 pb-1 mt-auto">
-                      <Button
-                        variant="link"
-                        size="sm"
-                        onClick={() => setExpandedLists(!expandedLists)}
-                        className="h-auto p-1 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        {expandedLists ? (
-                          <>
-                            Show Less <ChevronUp className="ml-1 h-3 w-3" />
-                          </>
-                        ) : (
-                          <>
-                            Show More <ChevronDown className="ml-1 h-3 w-3" />
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
                 </>
               )}
             </CardContent>
@@ -1184,7 +1121,7 @@ export default function Dashboard() {
                 <>
                   <div className="divide-y flex-1">
                     {topDomainsData
-                      .slice(0, expandedLists ? 10 : 5)
+                      .slice(0, 5)
                       .map((domain) => (
                         <div
                           key={domain.name}
@@ -1210,28 +1147,6 @@ export default function Dashboard() {
                         </div>
                       ))}
                   </div>
-                  {(topClientsData.length > 5 ||
-                    topDomainsData.length > 5 ||
-                    topBlockedDomainsData.length > 5) && (
-                    <div className="flex items-center justify-center pt-2 pb-1 mt-auto">
-                      <Button
-                        variant="link"
-                        size="sm"
-                        onClick={() => setExpandedLists(!expandedLists)}
-                        className="h-auto p-1 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        {expandedLists ? (
-                          <>
-                            Show Less <ChevronUp className="ml-1 h-3 w-3" />
-                          </>
-                        ) : (
-                          <>
-                            Show More <ChevronDown className="ml-1 h-3 w-3" />
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
                 </>
               )}
             </CardContent>
@@ -1267,7 +1182,7 @@ export default function Dashboard() {
                 <>
                   <div className="divide-y flex-1">
                     {topBlockedDomainsData
-                      .slice(0, expandedLists ? 10 : 5)
+                      .slice(0, 5)
                       .map((domain) => (
                         <div
                           key={domain.name}
@@ -1293,28 +1208,6 @@ export default function Dashboard() {
                         </div>
                       ))}
                   </div>
-                  {(topClientsData.length > 5 ||
-                    topDomainsData.length > 5 ||
-                    topBlockedDomainsData.length > 5) && (
-                    <div className="flex items-center justify-center pt-2 pb-1 mt-auto">
-                      <Button
-                        variant="link"
-                        size="sm"
-                        onClick={() => setExpandedLists(!expandedLists)}
-                        className="h-auto p-1 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        {expandedLists ? (
-                          <>
-                            Show Less <ChevronUp className="ml-1 h-3 w-3" />
-                          </>
-                        ) : (
-                          <>
-                            Show More <ChevronDown className="ml-1 h-3 w-3" />
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
                 </>
               )}
             </CardContent>
