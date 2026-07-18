@@ -482,6 +482,13 @@ export default function Cluster() {
     // so only the primary password (and a 2FA code, if enabled) is needed.
     if (selfNode?.url) setAddPrimaryUrl(selfNode.url);
     if (user?.username) setAddPrimaryUsername(user.username);
+    // Pre-fill the primary's IP so the new node can reach it directly. A fresh
+    // secondary often can't resolve the primary's domain name yet (its own DNS
+    // isn't configured), which otherwise fails the join with "could not be
+    // resolved to an IP address". These are the addresses the primary advertised
+    // as reachable by secondaries, so they're the right manual override.
+    const primaryIpSuggestion = selfNode?.ipAddresses?.[0] ?? serverIpAddresses[0];
+    if (primaryIpSuggestion) setAddPrimaryIp(primaryIpSuggestion);
     setAddNodeStep(1);
     setAddNodeToken('');
     setAddNodeNeeds2fa(false);
@@ -497,7 +504,7 @@ export default function Cluster() {
         }
       })
       .catch(() => {});
-  }, [selfNode, user]);
+  }, [selfNode, user, serverIpAddresses]);
 
   // Step 1: verify the new node by signing in to it. On success we hold a token
   // scoped to that node and advance to the confirm step; if it has 2FA we reveal
@@ -606,6 +613,19 @@ export default function Cluster() {
         if (!addPrimaryNeeds2fa && /2fa|totp|two.?factor|authenticator/i.test(message)) {
           setAddPrimaryNeeds2fa(true);
         }
+        // The new node couldn't resolve the primary's domain to an IP. Surface
+        // the manual override: open Advanced Options, suggest the primary's own
+        // IP if the field is empty, and focus it so the user can retry.
+        if (/could not be resolved|resolve.*ip address|specify the primary node ip/i.test(message)) {
+          setAddAdvancedOpen(true);
+          if (!addPrimaryIp.trim()) {
+            const suggestion = selfNode?.ipAddresses?.[0] ?? serverIpAddresses[0];
+            if (suggestion) setAddPrimaryIp(suggestion);
+          }
+          requestAnimationFrame(() => {
+            document.getElementById('addPrimaryIp')?.focus();
+          });
+        }
         toast.error(message);
       }
     } catch (error) {
@@ -625,6 +645,8 @@ export default function Cluster() {
     addPrimaryTotp,
     addPrimaryNeeds2fa,
     addIgnoreCert,
+    selfNode,
+    serverIpAddresses,
     resetAddNodeForm,
     refetch,
   ]);
@@ -1686,6 +1708,10 @@ export default function Cluster() {
                       />
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Pre-filled with this node's IP so a new secondary can reach the primary
+                    directly. Set this when the new node can't resolve the primary's domain name.
+                  </p>
 
                   <div className="flex items-start space-x-2">
                     <Checkbox
