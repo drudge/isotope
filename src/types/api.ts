@@ -209,6 +209,68 @@ export interface RecordListResponse {
   records: DnsRecord[];
 }
 
+// DNSSEC (zones/dnssec/*). Wire formats verified against the server's
+// WebServiceZonesApi.cs — several fields below are absent from APIDOCS.md
+// (isRetiring on DS records, nsec3Iterations/nsec3SaltLength, stateActiveBy).
+
+export interface DnssecDsDigest {
+  digestType: string;
+  // The server returns this as a string (e.g. "2" for SHA256, "4" for SHA384).
+  digestTypeNumber: string;
+  digest: string;
+}
+
+export interface DnssecDsRecord {
+  keyTag: number;
+  // Present only when a matching KSK private key exists for the DNSKEY.
+  dnsKeyState?: string;
+  // Present only while the KSK is in the Published state.
+  dnsKeyStateReadyBy?: string;
+  isRetiring?: boolean;
+  algorithm: string;
+  algorithmNumber: number;
+  publicKey: string;
+  digests: DnssecDsDigest[];
+}
+
+export interface DnssecDsInfo {
+  name: string;
+  type: Zone['type'];
+  disabled: boolean;
+  dnssecStatus: string;
+  dsRecords: DnssecDsRecord[];
+}
+
+export type DnssecKeyType = 'KeySigningKey' | 'ZoneSigningKey';
+
+export interface DnssecPrivateKey {
+  keyTag: number;
+  keyType: DnssecKeyType;
+  // For RSA keys the server appends the key size, e.g. "RSASHA256 (2048 bits)".
+  algorithm: string;
+  algorithmNumber: number;
+  // Generated | Published | Ready | Active | Retired | Revoked (render as-is).
+  state: string;
+  stateChangedOn: string;
+  // Published KSKs carry stateReadyBy; published ZSKs carry stateActiveBy.
+  stateReadyBy?: string;
+  stateActiveBy?: string;
+  isRetiring: boolean;
+  rolloverDays: number;
+}
+
+export interface DnssecProperties {
+  name: string;
+  type: Zone['type'];
+  disabled: boolean;
+  dnssecStatus: 'Unsigned' | 'SignedWithNSEC' | 'SignedWithNSEC3';
+  // Present only when signed with NSEC3.
+  nsec3Iterations?: number;
+  nsec3SaltLength?: number;
+  dnsKeyTtl: number;
+  dnssecPrivateKeys: DnssecPrivateKey[];
+}
+
 export type BlockingType = 'AnyAddress' | 'NxDomain' | 'CustomAddress';
 
 export interface BlockingSettings {

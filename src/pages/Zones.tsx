@@ -20,6 +20,7 @@ import {
   Upload,
   Copy,
   KeyRound,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,6 +94,7 @@ import {
   ZoneConvertDialog,
   ZoneImportDialog,
 } from "@/components/zones/ZoneToolsDialogs";
+import { DnssecDialog } from "@/components/zones/DnssecDialog";
 import { toast } from "sonner";
 import type { Zone, DnsRecord } from "@/types/api";
 
@@ -138,6 +140,7 @@ const CONVERT_TYPES = new Set<Zone["type"]>([
 interface ZoneActions {
   onOptions: (zone: Zone) => void;
   onPermissions: (zone: Zone) => void;
+  onDnssec: (zone: Zone) => void;
   onImport: (zone: Zone) => void;
   onExport: (zone: Zone) => void;
   onClone: (zone: Zone) => void;
@@ -165,6 +168,12 @@ function ZoneActionMenuItems({
         <KeyRound className="h-4 w-4 mr-2" />
         Permissions
       </DropdownMenuItem>
+      {zone.type === "Primary" && (
+        <DropdownMenuItem onClick={() => actions.onDnssec(zone)}>
+          <ShieldCheck className="h-4 w-4 mr-2" />
+          DNSSEC
+        </DropdownMenuItem>
+      )}
       <DropdownMenuSeparator />
       {!compact && IMPORT_TYPES.has(zone.type) && (
         <DropdownMenuItem onClick={() => actions.onImport(zone)}>
@@ -1752,13 +1761,30 @@ function ZoneRecordsView({
           <div className="flex flex-wrap items-center gap-2 mt-1">
             <ZoneTypeBadge type={zone.type} />
             <ZoneStatusBadge zone={zone} />
-            {zone.dnssecStatus && zone.dnssecStatus !== "Unsigned" && (
-              <Badge
-                variant="outline"
-                className="text-xs hidden sm:inline-flex"
+            {zone.type === "Primary" && !zone.internal ? (
+              <button
+                type="button"
+                onClick={() => actions.onDnssec(zone)}
+                className="hidden sm:inline-flex"
               >
-                DNSSEC: {zone.dnssecStatus}
-              </Badge>
+                <Badge
+                  variant="outline"
+                  className="text-xs cursor-pointer hover:bg-muted transition-colors"
+                >
+                  <ShieldCheck className="h-3 w-3 mr-1" />
+                  DNSSEC: {zone.dnssecStatus || "Unsigned"}
+                </Badge>
+              </button>
+            ) : (
+              zone.dnssecStatus &&
+              zone.dnssecStatus !== "Unsigned" && (
+                <Badge
+                  variant="outline"
+                  className="text-xs hidden sm:inline-flex"
+                >
+                  DNSSEC: {zone.dnssecStatus}
+                </Badge>
+              )
             )}
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
@@ -1808,9 +1834,9 @@ function ZoneRecordsView({
             </DialogTrigger>
             <DialogContent
               showCloseButton={false}
-              className="max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[90vh] flex flex-col p-0"
+              className="max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[90vh] flex flex-col p-0 overflow-hidden"
             >
-              <DialogHeader className="sticky top-0 z-10 bg-background px-6 pt-6 pb-4 border-b">
+              <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1.5">
                     <DialogTitle>Add DNS Record</DialogTitle>
@@ -1830,14 +1856,16 @@ function ZoneRecordsView({
                   </DialogClose>
                 </div>
               </DialogHeader>
-              <div className="overflow-y-auto px-6 flex-1">
+              {/* min-h-0 lets this flex child shrink so it scrolls instead of
+                  overflowing the dialog when the form is taller than 90vh. */}
+              <div className="overflow-y-auto px-6 flex-1 min-h-0">
                 <RecordForm
                   data={newRecord}
                   onChange={setNewRecord}
                   installedApps={installedApps}
                 />
               </div>
-              <DialogFooter className="sticky bottom-0 z-10 bg-background px-6 py-4 border-t">
+              <DialogFooter className="shrink-0 px-6 py-4 border-t">
                 <Button variant="outline" onClick={() => setIsAddOpen(false)}>
                   Cancel
                 </Button>
@@ -1875,9 +1903,9 @@ function ZoneRecordsView({
         >
           <DialogContent
             showCloseButton={false}
-            className="max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[90vh] flex flex-col p-0"
+            className="max-w-[95vw] sm:max-w-2xl lg:max-w-3xl max-h-[90vh] flex flex-col p-0 overflow-hidden"
           >
-            <DialogHeader className="sticky top-0 z-10 bg-background px-6 pt-6 pb-4 border-b">
+            <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1.5">
                   <DialogTitle>Edit DNS Record</DialogTitle>
@@ -1897,7 +1925,9 @@ function ZoneRecordsView({
                 </DialogClose>
               </div>
             </DialogHeader>
-            <div className="overflow-y-auto px-6 flex-1">
+            {/* min-h-0 lets this flex child shrink so it scrolls instead of
+                overflowing the dialog when the form is taller than 90vh. */}
+            <div className="overflow-y-auto px-6 flex-1 min-h-0">
               {editRecord && (
                 <RecordForm
                   data={editRecord}
@@ -1909,7 +1939,7 @@ function ZoneRecordsView({
                 />
               )}
             </div>
-            <DialogFooter className="sticky bottom-0 z-10 bg-background px-6 py-4 border-t flex-col sm:flex-row gap-2">
+            <DialogFooter className="shrink-0 px-6 py-4 border-t flex-col sm:flex-row gap-2">
               <Button
                 variant="destructive"
                 onClick={() => {
@@ -2114,6 +2144,7 @@ export default function Zones() {
   // Zone management dialogs (shared by the list rows and the detail header)
   const [optionsZone, setOptionsZone] = useState<Zone | null>(null);
   const [permissionsZone, setPermissionsZone] = useState<Zone | null>(null);
+  const [dnssecZone, setDnssecZone] = useState<Zone | null>(null);
   const [importTarget, setImportTarget] = useState<Zone | null>(null);
   const [cloneSource, setCloneSource] = useState<Zone | null>(null);
   const [convertTarget, setConvertTarget] = useState<Zone | null>(null);
@@ -2221,6 +2252,7 @@ export default function Zones() {
   const zoneActions: ZoneActions = {
     onOptions: setOptionsZone,
     onPermissions: setPermissionsZone,
+    onDnssec: setDnssecZone,
     onImport: setImportTarget,
     onExport: handleExport,
     onClone: setCloneSource,
@@ -2241,6 +2273,16 @@ export default function Zones() {
         zone={permissionsZone}
         onOpenChange={(open) => {
           if (!open) setPermissionsZone(null);
+        }}
+      />
+      <DnssecDialog
+        zone={dnssecZone}
+        onOpenChange={(open) => {
+          if (!open) setDnssecZone(null);
+        }}
+        onChanged={() => {
+          refetch();
+          setRecordsRefreshKey((k) => k + 1);
         }}
       />
       <ZoneImportDialog
