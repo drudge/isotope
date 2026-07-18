@@ -40,6 +40,13 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
       },
+      // OIDC single sign-on: /sso/login starts the flow and /sso/callback
+      // finishes it, setting a token cookie and redirecting back to "/".
+      '/sso': {
+        target: 'https://dns.penree.net',
+        changeOrigin: true,
+        secure: true,
+      },
     },
   },
 })

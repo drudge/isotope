@@ -61,6 +61,27 @@ export interface DnsStatsResponse {
   protocolTypeChartData?: unknown;
 }
 
+export interface TopClientEntry {
+  name: string;
+  // Reverse-lookup result; absent when the PTR resolution found nothing.
+  domain?: string;
+  hits: number;
+  rateLimited?: boolean;
+}
+
+export interface TopDomainEntry {
+  name: string;
+  hits: number;
+}
+
+// Response of /dashboard/stats/getTop; only the field matching the requested
+// statsType is present.
+export interface TopStatsResponse {
+  topClients?: TopClientEntry[];
+  topDomains?: TopDomainEntry[];
+  topBlockedDomains?: TopDomainEntry[];
+}
+
 export interface Zone {
   name: string;
   type: 'Primary' | 'Secondary' | 'Stub' | 'Forwarder' | 'SecondaryForwarder' | 'Catalog' | 'SecondaryCatalog';
@@ -118,6 +139,50 @@ export interface LoginResponse {
   totpEnabled?: boolean;
   // Present when login is called with includeInfo=true.
   info?: LoginInfo;
+}
+
+// Response of GET /api/sso/status (root-level fields, unauthenticated).
+export interface SsoStatus {
+  ssoEnabled: boolean;
+  server?: string;
+}
+
+// Response of /user/2fa/init. When 2FA is already enabled only totpEnabled
+// is returned; otherwise the server includes a rendered QR code PNG and the
+// base32 secret for manual authenticator entry.
+export interface TwoFactorInit {
+  totpEnabled: boolean;
+  qrCodePngImage?: string;
+  secret?: string;
+}
+
+// One entry of the sessions list in /user/profile/get (same shape as the
+// admin sessions API).
+export interface UserSessionEntry {
+  username: string;
+  isCurrentSession: boolean;
+  partialToken: string;
+  type: 'Standard' | 'ApiToken';
+  tokenName: string | null;
+  lastSeen: string;
+  lastSeenRemoteAddress: string;
+  lastSeenUserAgent: string;
+}
+
+// Response of /user/profile/get.
+export interface UserProfile {
+  displayName: string;
+  username: string;
+  isSsoUser?: boolean;
+  totpEnabled: boolean;
+  disabled: boolean;
+  previousSessionLoggedOn?: string;
+  previousSessionRemoteAddress?: string;
+  recentSessionLoggedOn?: string;
+  recentSessionRemoteAddress?: string;
+  sessionTimeoutSeconds?: number;
+  memberOfGroups?: string[];
+  sessions?: UserSessionEntry[];
 }
 
 // Response from GET /api/user/checkForUpdate (payload wrapped in `response`).

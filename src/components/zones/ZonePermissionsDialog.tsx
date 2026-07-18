@@ -215,9 +215,9 @@ export function ZonePermissionsDialog({
     <Dialog open={!!zone} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="max-w-[95vw] sm:max-w-xl max-h-[90vh] flex flex-col p-0"
+        className="max-w-[95vw] sm:max-w-xl max-h-[90vh] flex flex-col p-0 overflow-hidden"
       >
-        <DialogHeader className="sticky top-0 z-10 bg-background px-6 pt-6 pb-4 border-b">
+        <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1.5 min-w-0">
               <DialogTitle>Zone Permissions</DialogTitle>
@@ -238,7 +238,9 @@ export function ZonePermissionsDialog({
           </div>
         </DialogHeader>
 
-        <div className="overflow-y-auto px-6 py-4 flex-1 space-y-6">
+        {/* min-h-0 lets this flex child shrink so it scrolls instead of
+            overflowing the dialog when content is taller than 90vh. */}
+        <div className="overflow-y-auto px-6 py-4 flex-1 min-h-0 space-y-6">
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -333,7 +335,7 @@ export function ZonePermissionsDialog({
           )}
         </div>
 
-        <DialogFooter className="sticky bottom-0 z-10 bg-background px-6 py-4 border-t">
+        <DialogFooter className="shrink-0 px-6 py-4 border-t">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>

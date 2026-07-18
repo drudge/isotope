@@ -1,11 +1,37 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useApi } from "@/hooks/useApi";
 import { getServerInfo } from "@/api/dns";
+import { apiClient } from "@/api/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowUpCircle, CheckCircle2, ExternalLink, RefreshCw } from "lucide-react";
+import {
+  ArrowUpCircle,
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  LineChart,
+  RefreshCw,
+} from "lucide-react";
+import { toast } from "sonner";
 import { useUpdateCheck } from "@/hooks/useUpdateCheck";
+
+// Prometheus scrape config pointed at this deployment's /api proxy. The
+// token placeholder is an API token created on the Profile page.
+function prometheusScrapeConfig(): string {
+  const { protocol, host } = window.location;
+  return [
+    "scrape_configs:",
+    '  - job_name: "technitium-dns"',
+    '    metrics_path: "/api/dashboard/metrics/text"',
+    `    scheme: "${protocol.replace(":", "")}"`,
+    "    params:",
+    '      token: ["YOUR_API_TOKEN"]',
+    "    static_configs:",
+    `      - targets: ["${host}"]`,
+  ].join("\n");
+}
 
 export default function About() {
   useDocumentTitle("About");
@@ -242,6 +268,44 @@ export default function About() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <LineChart className="h-5 w-5" />
+            Prometheus Metrics
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            The server exposes lifetime query metrics in Prometheus text
+            format. Authenticate the scrape with an API token — create one on
+            the{" "}
+            <Link to="/profile" className="text-primary hover:underline">
+              Profile page
+            </Link>
+            , then drop this into your prometheus.yml:
+          </p>
+          <div className="relative">
+            <pre className="font-mono text-xs overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 pr-10">
+              {prometheusScrapeConfig()}
+            </pre>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-1 right-1 h-7 w-7"
+              onClick={() => {
+                navigator.clipboard.writeText(prometheusScrapeConfig());
+                toast.success("Copied to clipboard");
+              }}
+              title="Copy to clipboard"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <MetricsPreview />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Support</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -285,5 +349,42 @@ export default function About() {
         </p>
       </div>
     </div>
+  );
+}
+
+// Fetches the live metrics endpoint with the current session and shows the
+// first lines, proving the endpoint works before it goes into Prometheus.
+function MetricsPreview() {
+  const [preview, setPreview] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const loadPreview = async () => {
+    setLoading(true);
+    try {
+      const { blob } = await apiClient.download("/dashboard/metrics/text");
+      const text = await blob.text();
+      setPreview(text.trim().split("\n").slice(0, 12).join("\n"));
+    } catch (err) {
+      setPreview(
+        err instanceof Error ? `Failed to load metrics: ${err.message}` : "Failed to load metrics",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return preview === null ? (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => void loadPreview()}
+      disabled={loading}
+    >
+      {loading ? "Loading..." : "Preview metrics"}
+    </Button>
+  ) : (
+    <pre className="font-mono text-xs overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 max-h-56 overflow-y-auto">
+      {preview}
+    </pre>
   );
 }
