@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { ShieldCheck } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -34,6 +34,14 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const usernameRef = useRef<HTMLInputElement>(null);
+
+  // Focus username on mount. A ref+effect fires on every mount — including a
+  // client-side redirect from a protected route — where the bare autoFocus
+  // attribute can be beaten by focus landing on <body> during the transition.
+  useEffect(() => {
+    usernameRef.current?.focus();
+  }, []);
 
   const from =
     (location.state as { from?: { pathname: string } })?.from?.pathname || "/";
@@ -127,6 +135,7 @@ export default function Login() {
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
               <Input
+                ref={usernameRef}
                 id="username"
                 type="text"
                 value={username}
@@ -137,7 +146,6 @@ export default function Login() {
                 spellCheck={false}
                 required
                 disabled={isSubmitting}
-                autoFocus
               />
             </div>
             <div className="space-y-2">
