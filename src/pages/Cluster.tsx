@@ -7,13 +7,15 @@ import {
   RefreshCw,
   Plus,
   Link,
-  Settings,
+  Settings2,
   Globe,
   Trash2,
   LogOut,
   ArrowUp,
   MoreVertical,
-
+  ServerCog,
+  ChevronDown,
+  Check,
   AlertTriangle,
 } from 'lucide-react';
 import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
@@ -51,11 +53,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { useAuth } from '@/context/AuthContext';
+import { getUserProfile } from '@/api/auth';
 import { toast } from 'sonner';
 import {
   getClusterState,
   initializeCluster,
   joinCluster,
+  authenticateNode,
+  joinNodeToCluster,
   deleteCluster,
   removeSecondary,
   deleteSecondary,
@@ -212,6 +223,7 @@ function NodeCard({
 
 export default function Cluster() {
   useDocumentTitle('Cluster');
+  const { user } = useAuth();
 
   // Data fetching
   const { data: clusterData, isLoading, refetch } = useApi(
@@ -222,6 +234,7 @@ export default function Cluster() {
   // Dialog states
   const [initDialogOpen, setInitDialogOpen] = useState(false);
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
+  const [addNodeDialogOpen, setAddNodeDialogOpen] = useState(false);
   const [optionsDialogOpen, setOptionsDialogOpen] = useState(false);
   const [updateIpDialogOpen, setUpdateIpDialogOpen] = useState(false);
   const [updatePrimaryDialogOpen, setUpdatePrimaryDialogOpen] = useState(false);
@@ -244,6 +257,27 @@ export default function Cluster() {
   const [joinTotp, setJoinTotp] = useState('');
   const [joinIgnoreCert, setJoinIgnoreCert] = useState(false);
   const [joinLoading, setJoinLoading] = useState(false);
+
+  // Form states - Add Node (enroll a remote node as a secondary from here)
+  const [addNodeUrl, setAddNodeUrl] = useState('');
+  const [addNodeUsername, setAddNodeUsername] = useState('');
+  const [addNodePassword, setAddNodePassword] = useState('');
+  const [addNodeTotp, setAddNodeTotp] = useState('');
+  const [addNodeSecondaryIps, setAddNodeSecondaryIps] = useState('');
+  const [addPrimaryUrl, setAddPrimaryUrl] = useState('');
+  const [addPrimaryIp, setAddPrimaryIp] = useState('');
+  const [addPrimaryUsername, setAddPrimaryUsername] = useState('');
+  const [addPrimaryPassword, setAddPrimaryPassword] = useState('');
+  const [addPrimaryTotp, setAddPrimaryTotp] = useState('');
+  const [addIgnoreCert, setAddIgnoreCert] = useState(false);
+  const [addAdvancedOpen, setAddAdvancedOpen] = useState(false);
+  const [addNodeLoading, setAddNodeLoading] = useState(false);
+  // Add Node wizard: step 1 verifies the new node, step 2 confirms on this primary.
+  const [addNodeStep, setAddNodeStep] = useState<1 | 2>(1);
+  const [addNodeToken, setAddNodeToken] = useState('');
+  const [addNodeStepLoading, setAddNodeStepLoading] = useState(false);
+  const [addNodeNeeds2fa, setAddNodeNeeds2fa] = useState(false);
+  const [addPrimaryNeeds2fa, setAddPrimaryNeeds2fa] = useState(false);
 
   // Form states - Options
   const [optHeartbeatRefresh, setOptHeartbeatRefresh] = useState(30);
@@ -281,6 +315,19 @@ export default function Cluster() {
   const selfNode = useMemo(() => nodes.find((n) => n.state === 'Self'), [nodes]);
   const isPrimary = selfNode?.type === 'Primary';
   const isSecondary = selfNode?.type === 'Secondary';
+  // Name of this (primary) node, for labelling the Add Node wizard — Isotope can
+  // point at any server, so "this primary" alone is ambiguous.
+  const primaryLabel = useMemo(() => {
+    if (selfNode?.name) return selfNode.name;
+    if (selfNode?.url) {
+      try {
+        return new URL(selfNode.url).host;
+      } catch {
+        // fall through to the generic label
+      }
+    }
+    return 'this primary';
+  }, [selfNode]);
   const serverIpAddresses = useMemo(
     () => clusterState?.serverIpAddresses ?? [],
     [clusterState?.serverIpAddresses]
@@ -304,6 +351,25 @@ export default function Cluster() {
     setJoinPassword('');
     setJoinTotp('');
     setJoinIgnoreCert(false);
+  }, []);
+
+  const resetAddNodeForm = useCallback(() => {
+    setAddNodeUrl('');
+    setAddNodeUsername('');
+    setAddNodePassword('');
+    setAddNodeTotp('');
+    setAddNodeSecondaryIps('');
+    setAddPrimaryUrl('');
+    setAddPrimaryIp('');
+    setAddPrimaryUsername('');
+    setAddPrimaryPassword('');
+    setAddPrimaryTotp('');
+    setAddIgnoreCert(false);
+    setAddAdvancedOpen(false);
+    setAddNodeStep(1);
+    setAddNodeToken('');
+    setAddNodeNeeds2fa(false);
+    setAddPrimaryNeeds2fa(false);
   }, []);
 
   // Quick add IPs handler
@@ -406,6 +472,160 @@ export default function Cluster() {
     joinTotp,
     joinIgnoreCert,
     resetJoinForm,
+    refetch,
+  ]);
+
+  // Open the Add Node dialog, pre-filling this primary node's own details so the
+  // new node knows where to sync from.
+  const openAddNodeDialog = useCallback(() => {
+    // The primary URL and admin username are derived from this node / session,
+    // so only the primary password (and a 2FA code, if enabled) is needed.
+    if (selfNode?.url) setAddPrimaryUrl(selfNode.url);
+    if (user?.username) setAddPrimaryUsername(user.username);
+    setAddNodeStep(1);
+    setAddNodeToken('');
+    setAddNodeNeeds2fa(false);
+    setAddPrimaryNeeds2fa(false);
+    setAddAdvancedOpen(false);
+    setAddNodeDialogOpen(true);
+    // Detect whether this admin has 2FA so we can ask for the code up front on
+    // the confirm step instead of failing the join.
+    getUserProfile()
+      .then((res) => {
+        if (res.status === 'ok') {
+          setAddPrimaryNeeds2fa(!!res.response?.totpEnabled);
+        }
+      })
+      .catch(() => {});
+  }, [selfNode, user]);
+
+  // Step 1: verify the new node by signing in to it. On success we hold a token
+  // scoped to that node and advance to the confirm step; if it has 2FA we reveal
+  // a code field and let the user retry (mirrors the login flow).
+  const handleVerifyNode = useCallback(async () => {
+    if (!addNodeUrl.trim()) {
+      toast.error('New node URL is required');
+      return;
+    }
+    if (!addNodeUsername.trim() || !addNodePassword) {
+      toast.error('New node admin credentials are required');
+      return;
+    }
+    if (!addNodeSecondaryIps.trim()) {
+      toast.error('New node IP addresses are required');
+      return;
+    }
+    if (addNodeNeeds2fa && !addNodeTotp.trim()) {
+      toast.error('Enter the new node authenticator code');
+      return;
+    }
+
+    setAddNodeStepLoading(true);
+    try {
+      const result = await authenticateNode(
+        addNodeUrl.trim(),
+        addNodeUsername.trim(),
+        addNodePassword,
+        addNodeTotp.trim() || undefined
+      );
+
+      if (result.status === 'ok' && result.token) {
+        setAddNodeToken(result.token);
+        setAddNodeStep(2);
+      } else if (result.status === '2fa-required') {
+        setAddNodeNeeds2fa(true);
+        toast.error(
+          addNodeTotp
+            ? result.errorMessage || 'Invalid authenticator code'
+            : 'This node has 2FA enabled — enter its authenticator code'
+        );
+      } else {
+        toast.error(result.errorMessage || 'Could not sign in to the new node');
+      }
+    } catch (error) {
+      console.error('Failed to verify node:', error);
+      toast.error('Failed to reach the new node');
+    } finally {
+      setAddNodeStepLoading(false);
+    }
+  }, [
+    addNodeUrl,
+    addNodeUsername,
+    addNodePassword,
+    addNodeTotp,
+    addNodeSecondaryIps,
+    addNodeNeeds2fa,
+  ]);
+
+  // Step 2: tell the verified node to join, authorized by the primary password
+  // (and 2FA code if this admin has it enabled).
+  const handleAddNode = useCallback(async () => {
+    if (!addNodeToken) {
+      setAddNodeStep(1);
+      toast.error('Verify the new node first');
+      return;
+    }
+    if (!addPrimaryUrl.trim()) {
+      toast.error('Primary node URL is required');
+      return;
+    }
+    if (!addPrimaryPassword) {
+      toast.error('Your primary password is required');
+      return;
+    }
+    if (addPrimaryNeeds2fa && !addPrimaryTotp.trim()) {
+      toast.error('Enter your authenticator code');
+      return;
+    }
+
+    setAddNodeLoading(true);
+    try {
+      const response = await joinNodeToCluster({
+        nodeUrl: addNodeUrl.trim(),
+        nodeToken: addNodeToken,
+        secondaryNodeIpAddresses: addNodeSecondaryIps
+          .split('\n')
+          .filter(Boolean)
+          .join(','),
+        primaryNodeUrl: addPrimaryUrl.trim(),
+        primaryNodeIpAddress: addPrimaryIp.trim() || undefined,
+        primaryNodeUsername: addPrimaryUsername.trim(),
+        primaryNodePassword: addPrimaryPassword,
+        primaryNodeTotp: addPrimaryTotp.trim() || undefined,
+        ignoreCertificateErrors: addIgnoreCert,
+      });
+
+      if (response.status === 'ok') {
+        toast.success('Node enrolled as a secondary');
+        setAddNodeDialogOpen(false);
+        resetAddNodeForm();
+        refetch();
+      } else {
+        const message = response.errorMessage || 'Failed to add node';
+        // Reveal the 2FA field if the primary needed a code we didn't ask for.
+        if (!addPrimaryNeeds2fa && /2fa|totp|two.?factor|authenticator/i.test(message)) {
+          setAddPrimaryNeeds2fa(true);
+        }
+        toast.error(message);
+      }
+    } catch (error) {
+      console.error('Failed to add node:', error);
+      toast.error('Failed to add node');
+    } finally {
+      setAddNodeLoading(false);
+    }
+  }, [
+    addNodeToken,
+    addNodeUrl,
+    addNodeSecondaryIps,
+    addPrimaryUrl,
+    addPrimaryIp,
+    addPrimaryUsername,
+    addPrimaryPassword,
+    addPrimaryTotp,
+    addPrimaryNeeds2fa,
+    addIgnoreCert,
+    resetAddNodeForm,
     refetch,
   ]);
 
@@ -767,7 +987,7 @@ export default function Cluster() {
                     {isPrimary && (
                       <>
                         <Button variant="outline" size="sm" onClick={openOptionsDialog}>
-                          <Settings className="h-4 w-4 mr-2" />
+                          <ServerCog className="h-4 w-4 mr-2" />
                           Cluster Options
                         </Button>
                         <Button variant="outline" size="sm" onClick={openUpdateIpDialog}>
@@ -842,10 +1062,20 @@ export default function Cluster() {
           {isInitialized && !isLoading && nodes.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Cluster Nodes</CardTitle>
-                <CardDescription>
-                  {nodes.length} {nodes.length === 1 ? 'node' : 'nodes'} in this cluster
-                </CardDescription>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1.5">
+                    <CardTitle className="text-lg">Cluster Nodes</CardTitle>
+                    <CardDescription>
+                      {nodes.length} {nodes.length === 1 ? 'node' : 'nodes'} in this cluster
+                    </CardDescription>
+                  </div>
+                  {isPrimary && (
+                    <Button size="sm" className="shrink-0" onClick={openAddNodeDialog}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Node
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 {nodes.map((node) => (
@@ -1186,6 +1416,356 @@ export default function Cluster() {
                 'Join Cluster'
               )}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Node wizard: step 1 verifies the new node, step 2 confirms here */}
+      <Dialog
+        open={addNodeDialogOpen}
+        onOpenChange={(open) => {
+          if (!addNodeLoading && !addNodeStepLoading) {
+            setAddNodeDialogOpen(open);
+            if (!open) resetAddNodeForm();
+          }
+        }}
+      >
+        <DialogContent
+          className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-lg"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <DialogHeader className="shrink-0">
+            <DialogTitle>Add Node to Cluster</DialogTitle>
+            <DialogDescription>
+              {addNodeStep === 1
+                ? 'Connect to the DNS server you want to enroll as a secondary.'
+                : `Confirm with your credentials on ${primaryLabel} to authorize the join.`}
+            </DialogDescription>
+
+            {/* Two-step progress indicator */}
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                  {addNodeStep > 1 ? <Check className="h-3.5 w-3.5" /> : '1'}
+                </span>
+                <span
+                  className={cn(
+                    'text-sm',
+                    addNodeStep === 1 ? 'font-medium text-foreground' : 'text-muted-foreground'
+                  )}
+                >
+                  Enroll new node
+                </span>
+              </div>
+              <div
+                className={cn(
+                  'h-px w-10 transition-colors',
+                  addNodeStep > 1 ? 'bg-primary' : 'bg-border'
+                )}
+              />
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    'flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold transition-colors',
+                    addNodeStep === 2
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground'
+                  )}
+                >
+                  2
+                </span>
+                <span
+                  className={cn(
+                    'text-sm',
+                    addNodeStep === 2 ? 'font-medium text-foreground' : 'text-muted-foreground'
+                  )}
+                >
+                  Confirm
+                </span>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {addNodeStep === 1 ? (
+            <>
+              {/* Caution about the new node being overwritten, pinned + visible */}
+              <div className="mt-1 flex shrink-0 gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/20">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
+                <p className="text-sm text-amber-900 dark:text-amber-100">
+                  Joining overwrites the new node's Allowed, Blocked, Apps, Settings, and
+                  Administration.
+                </p>
+              </div>
+
+              <div className="-mr-2 min-h-0 flex-1 space-y-3 overflow-y-auto pr-2 pt-1">
+                <div className="space-y-2">
+                  <Label htmlFor="addNodeUrl">New Node URL</Label>
+                  <Input
+                    id="addNodeUrl"
+                    placeholder="http://ns2.example.com:5380"
+                    value={addNodeUrl}
+                    onChange={(e) => setAddNodeUrl(e.target.value)}
+                    disabled={addNodeStepLoading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The new node's web console URL. Its host must be covered by the server's{' '}
+                    <code className="font-mono">CLUSTER_NODE_ALLOWED_DOMAINS</code>.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="addNodeUsername">New Node Admin</Label>
+                    <Input
+                      id="addNodeUsername"
+                      placeholder="Username"
+                      autoComplete="off"
+                      value={addNodeUsername}
+                      onChange={(e) => setAddNodeUsername(e.target.value)}
+                      disabled={addNodeStepLoading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="addNodePassword">Password</Label>
+                    <Input
+                      id="addNodePassword"
+                      type="password"
+                      autoComplete="new-password"
+                      value={addNodePassword}
+                      onChange={(e) => setAddNodePassword(e.target.value)}
+                      disabled={addNodeStepLoading}
+                    />
+                  </div>
+                </div>
+
+                {addNodeNeeds2fa && (
+                  <div className="space-y-2">
+                    <Label htmlFor="addNodeTotp">New Node Authenticator Code</Label>
+                    <Input
+                      id="addNodeTotp"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="123456"
+                      maxLength={6}
+                      value={addNodeTotp}
+                      onChange={(e) => setAddNodeTotp(e.target.value.replace(/\D/g, ''))}
+                      disabled={addNodeStepLoading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      This node has two-factor authentication enabled.
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="addNodeIps">New Node IP Addresses</Label>
+                  <Textarea
+                    id="addNodeIps"
+                    placeholder="Enter IP addresses (one per line)"
+                    value={addNodeSecondaryIps}
+                    onChange={(e) => setAddNodeSecondaryIps(e.target.value)}
+                    rows={2}
+                    disabled={addNodeStepLoading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    IP addresses of the new node that other cluster nodes can reach.
+                  </p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="-mr-2 min-h-0 flex-1 space-y-4 overflow-y-auto pr-2 pt-1">
+              {/* Summary of what will happen */}
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-100">
+                <span className="font-semibold">
+                  {(() => {
+                    try {
+                      return new URL(addNodeUrl).host;
+                    } catch {
+                      return 'The new node';
+                    }
+                  })()}
+                </span>{' '}
+                will join{' '}
+                <span className="font-semibold">
+                  {clusterState?.clusterDomain || 'this cluster'}
+                </span>{' '}
+                as a secondary and sync its configuration from{' '}
+                <span className="font-semibold">
+                  {addPrimaryUsername || user?.username || 'the current admin'}
+                </span>{' '}
+                on{' '}
+                <span className="font-semibold">{primaryLabel}</span>.
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="addPrimaryPassword">Your password on {primaryLabel}</Label>
+                <Input
+                  id="addPrimaryPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  value={addPrimaryPassword}
+                  onChange={(e) => setAddPrimaryPassword(e.target.value)}
+                  disabled={addNodeLoading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used once to authorize the new node's config sync. Not stored.
+                </p>
+              </div>
+
+              {addPrimaryNeeds2fa && (
+                <div className="space-y-2">
+                  <Label htmlFor="addPrimaryTotp">Your Authenticator Code</Label>
+                  <Input
+                    id="addPrimaryTotp"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="123456"
+                    maxLength={6}
+                    value={addPrimaryTotp}
+                    onChange={(e) => setAddPrimaryTotp(e.target.value.replace(/\D/g, ''))}
+                    disabled={addNodeLoading}
+                  />
+                </div>
+              )}
+
+              {/* Advanced: rarely-needed overrides */}
+              <Collapsible open={addAdvancedOpen} onOpenChange={setAddAdvancedOpen}>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2 text-muted-foreground hover:text-foreground"
+                    disabled={addNodeLoading}
+                  >
+                    <Settings2 className="h-4 w-4" />
+                    Advanced Options
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 transition-transform',
+                        addAdvancedOpen && 'rotate-180'
+                      )}
+                    />
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 pt-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="addPrimaryUrl">Primary Node URL</Label>
+                    <Input
+                      id="addPrimaryUrl"
+                      placeholder="https://primary.example.com:53443/"
+                      value={addPrimaryUrl}
+                      onChange={(e) => setAddPrimaryUrl(e.target.value)}
+                      disabled={addNodeLoading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      HTTPS URL the new node connects to for config sync. Defaults to this node.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="addPrimaryUsername">Primary Admin Username</Label>
+                      <Input
+                        id="addPrimaryUsername"
+                        autoComplete="off"
+                        value={addPrimaryUsername}
+                        onChange={(e) => setAddPrimaryUsername(e.target.value)}
+                        disabled={addNodeLoading}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="addPrimaryIp">Primary Node IP (Optional)</Label>
+                      <Input
+                        id="addPrimaryIp"
+                        placeholder="192.168.1.1"
+                        value={addPrimaryIp}
+                        onChange={(e) => setAddPrimaryIp(e.target.value)}
+                        disabled={addNodeLoading}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-2">
+                    <Checkbox
+                      id="addIgnoreCert"
+                      checked={addIgnoreCert}
+                      onCheckedChange={(checked) => setAddIgnoreCert(checked as boolean)}
+                      disabled={addNodeLoading}
+                    />
+                    <div className="space-y-1">
+                      <Label htmlFor="addIgnoreCert" className="cursor-pointer text-sm">
+                        Ignore Certificate Validation Errors
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Use only for a self-signed certificate on this primary over a trusted
+                        network.
+                      </p>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+
+              {addNodeLoading && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/20">
+                  <div className="flex items-center gap-2">
+                    <IsotopeSpinner size="sm" className="text-blue-600" />
+                    <div className="text-sm text-blue-900 dark:text-blue-100">
+                      <strong>Enrolling node...</strong>
+                      <p className="mt-1 text-xs">
+                        This may take a while while the new node syncs configuration from the
+                        primary.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="shrink-0">
+            {addNodeStep === 1 ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setAddNodeDialogOpen(false)}
+                  disabled={addNodeStepLoading}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleVerifyNode} disabled={addNodeStepLoading}>
+                  {addNodeStepLoading ? (
+                    <>
+                      <IsotopeSpinner size="sm" className="mr-2" />
+                      Verifying...
+                    </>
+                  ) : (
+                    'Continue'
+                  )}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setAddNodeStep(1)}
+                  disabled={addNodeLoading}
+                >
+                  Back
+                </Button>
+                <Button onClick={handleAddNode} disabled={addNodeLoading}>
+                  {addNodeLoading ? (
+                    <>
+                      <IsotopeSpinner size="sm" className="mr-2" />
+                      Adding...
+                    </>
+                  ) : (
+                    'Add Node'
+                  )}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

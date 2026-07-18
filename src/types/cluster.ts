@@ -54,3 +54,23 @@ export interface UpdatePrimaryParams {
   primaryNodeUrl: string;
   primaryNodeIpAddresses?: string;
 }
+
+// Enrolling a remote node as a Secondary from the Primary's UI is a two-step
+// flow (Technitium requires the join to be initiated ON the joining node): first
+// authenticate to the new node through the cluster-node proxy, then tell it to
+// join using the token from that sign-in.
+export interface JoinNodeParams {
+  // The new node's current web service URL, e.g. "http://ns2.example.com:5380".
+  nodeUrl: string;
+  // Token obtained from authenticateNode() — scoped to the new node.
+  nodeToken: string;
+  // IPs the new node advertises to the rest of the cluster.
+  secondaryNodeIpAddresses: string;
+  // Primary (this node) details passed to the new node's initJoin call.
+  primaryNodeUrl: string;
+  primaryNodeIpAddress?: string;
+  primaryNodeUsername: string;
+  primaryNodePassword: string;
+  primaryNodeTotp?: string;
+  ignoreCertificateErrors?: boolean;
+}

@@ -6,6 +6,7 @@ import type {
   JoinClusterParams,
   ClusterOptionsParams,
   UpdatePrimaryParams,
+  JoinNodeParams,
 } from '@/types/cluster';
 
 // Get cluster state
@@ -149,4 +150,148 @@ export async function updateNodeIpAddresses(
   return apiClient.get<ClusterState>('/admin/cluster/updateIpAddress', {
     ipAddresses,
   });
+}
+
+// Same-origin prefix handled by the cluster-node proxy (Vite dev/preview and the
+// nginx image). It forwards /cluster-node/<scheme>/<host>/... to that node's own
+// web service so the browser never makes a cross-origin call (Technitium sends
+// no CORS headers). The target host is allow-listed server-side.
+const CLUSTER_NODE_PROXY_PREFIX = '/cluster-node';
+
+// Build the proxied API base for a node's web URL, e.g.
+//   http://ns2.example.com:5380  ->  /cluster-node/http/ns2.example.com:5380/api
+// The host is left unencoded (a colon is valid in a non-leading path segment) so
+// both the Vite middleware and the nginx regex capture a clean host:port.
+function nodeApiBase(nodeUrl: string): string {
+  const url = new URL(nodeUrl);
+  const scheme = url.protocol.replace(':', '');
+  if (scheme !== 'http' && scheme !== 'https') {
+    throw new Error('Node URL must use http or https');
+  }
+  return `${CLUSTER_NODE_PROXY_PREFIX}/${scheme}/${url.host}/api`;
+}
+
+async function nodePostForm<T>(
+  base: string,
+  endpoint: string,
+  params: Record<string, string>,
+  token: string | undefined,
+  timeoutMs: number
+): Promise<ApiResponse<T> & { token?: string }> {
+  const body = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) body.append(key, value);
+  });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${base}${endpoint}`, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body.toString(),
+    });
+    return (await response.json()) as ApiResponse<T> & { token?: string };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export interface NodeAuthResult {
+  status: string;
+  token?: string;
+  errorMessage?: string;
+}
+
+// Step 1 of enrolling a remote node: sign in to it through the cluster-node
+// proxy to obtain a token scoped to that node. Returns status '2fa-required'
+// when the node's admin has TOTP enabled (same as the login flow), so the caller
+// can prompt for a code and retry. The token never touches the shared (primary)
+// session token.
+export async function authenticateNode(
+  nodeUrl: string,
+  username: string,
+  password: string,
+  totp?: string
+): Promise<NodeAuthResult> {
+  let base: string;
+  try {
+    base = nodeApiBase(nodeUrl);
+  } catch (error) {
+    return {
+      status: 'error',
+      errorMessage: error instanceof Error ? error.message : 'Invalid node URL',
+    };
+  }
+
+  try {
+    const login = await nodePostForm<unknown>(
+      base,
+      '/user/login',
+      { user: username, pass: password, ...(totp ? { totp } : {}) },
+      undefined,
+      30000
+    );
+    return {
+      status: login.status,
+      token: login.token,
+      errorMessage: login.errorMessage,
+    };
+  } catch (error) {
+    return {
+      status: 'error',
+      errorMessage:
+        error instanceof Error
+          ? `Could not reach ${nodeUrl}: ${error.message}`
+          : `Could not reach ${nodeUrl}`,
+    };
+  }
+}
+
+// Step 2: tell an already-authenticated node to join this cluster as a Secondary.
+// Uses the token from authenticateNode(). This can take a while while the new
+// node pulls the initial configuration from the primary.
+export async function joinNodeToCluster(
+  params: JoinNodeParams
+): Promise<ApiResponse<ClusterState>> {
+  let base: string;
+  try {
+    base = nodeApiBase(params.nodeUrl);
+  } catch (error) {
+    return {
+      status: 'error',
+      errorMessage: error instanceof Error ? error.message : 'Invalid node URL',
+    };
+  }
+
+  try {
+    return await nodePostForm<ClusterState>(
+      base,
+      '/admin/cluster/initJoin',
+      {
+        secondaryNodeIpAddresses: params.secondaryNodeIpAddresses,
+        primaryNodeUrl: params.primaryNodeUrl,
+        primaryNodeIpAddress: params.primaryNodeIpAddress ?? '',
+        primaryNodeUsername: params.primaryNodeUsername,
+        primaryNodePassword: params.primaryNodePassword,
+        primaryNodeTotp: params.primaryNodeTotp ?? '',
+        ignoreCertificateErrors: params.ignoreCertificateErrors ? 'true' : '',
+      },
+      params.nodeToken,
+      180000
+    );
+  } catch (error) {
+    return {
+      status: 'error',
+      errorMessage:
+        error instanceof Error
+          ? `Join request failed: ${error.message}`
+          : 'Join request failed',
+    };
+  }
 }

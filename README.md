@@ -118,6 +118,36 @@ VITE_API_URL=http://localhost:5380
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `TECHNITIUM_API_URL` | URL of your Technitium DNS Server | `http://localhost:5380` |
+| `CLUSTER_NODE_ALLOWED_DOMAINS` | Comma-separated allow-list enabling the cluster **Add Node** flow. See below. | *(unset — feature off)* |
+| `CLUSTER_NODE_RESOLVER` | DNS resolver nginx uses to reach enrolled nodes. | `127.0.0.11` (Docker DNS) |
+
+### Adding nodes to a cluster
+
+Technitium requires a cluster join to be initiated **on the joining node**, and its
+web service sends no CORS headers — so the browser cannot call another node
+directly. Isotope's **Add Node** button (on the primary's Cluster page) works by
+proxying to the new node through a same-origin path, `/cluster-node/<scheme>/<host>/…`.
+
+That proxy is **off by default** and only forwards to hosts you allow-list, so it
+can never become an open forwarder:
+
+```bash
+docker run -d \
+  -p 8080:80 \
+  -e TECHNITIUM_API_URL=http://ns1.example.com:5380 \
+  -e CLUSTER_NODE_ALLOWED_DOMAINS=dns.example.com \
+  ghcr.io/drudge/isotope:latest
+```
+
+A target host is accepted only if it equals, or is a subdomain of, a listed
+domain. Adding `ns3`, `ns4`, … later needs no further config as long as they share
+an allow-listed domain. If nodes resolve via a non-Docker DNS server, set
+`CLUSTER_NODE_RESOLVER` to one that can resolve them. If Isotope is exposed to
+untrusted networks, require auth in front of the `/cluster-node/` path.
+
+For a custom reverse proxy instead of the bundled image, forward
+`/cluster-node/<scheme>/<host>/…` to `<scheme>://<host>/…` with the same
+allow-list and (for self-signed nodes) upstream TLS verification disabled.
 
 ## Tech Stack
 
