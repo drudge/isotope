@@ -36,14 +36,14 @@ export default defineConfig({
     port: process.env.PORT ? Number(process.env.PORT) : undefined,
     proxy: {
       '/api': {
-        target: 'https://dns.penree.net',
+        target: 'https://ns1.dns.penree.net',
         changeOrigin: true,
         secure: true,
       },
       // OIDC single sign-on: /sso/login starts the flow and /sso/callback
       // finishes it, setting a token cookie and redirecting back to "/".
       '/sso': {
-        target: 'https://dns.penree.net',
+        target: 'https://ns1.dns.penree.net',
         changeOrigin: true,
         secure: true,
       },
