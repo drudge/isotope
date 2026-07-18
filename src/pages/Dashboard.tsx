@@ -311,7 +311,7 @@ function CustomRangeFields({
         endMonth={endMonth}
         className="p-0"
       />
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="grid gap-1.5">
           <Label
             htmlFor="custom-range-start-time"
