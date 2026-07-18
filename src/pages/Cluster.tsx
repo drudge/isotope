@@ -26,14 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -112,6 +105,108 @@ function NodeStateBadge({ state }: { state: NodeState }) {
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${styles[state]}`}>
       {state}
     </span>
+  );
+}
+
+// A single cluster node rendered as a responsive card
+function NodeCard({
+  node,
+  canManage,
+  onRemove,
+}: {
+  node: ClusterNode;
+  canManage: boolean;
+  onRemove: (node: ClusterNode) => void;
+}) {
+  const isSelf = node.state === 'Self';
+  const isPrimaryNode = node.type === 'Primary';
+  const showMenu = canManage && node.type === 'Secondary';
+
+  return (
+    <div
+      className={cn(
+        'rounded-lg border p-4 transition-colors',
+        isSelf ? 'border-primary/30 bg-muted/40' : 'bg-card hover:bg-muted/30'
+      )}
+    >
+      {/* Header: identity + badges (stacks on mobile so the name is never clipped) */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div
+            className={cn(
+              'flex h-9 w-9 shrink-0 items-center justify-center rounded-md',
+              isPrimaryNode
+                ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
+            )}
+          >
+            {isPrimaryNode ? <Crown className="h-4 w-4" /> : <Server className="h-4 w-4" />}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="truncate font-medium" title={node.name}>
+                {node.name}
+              </span>
+              {isSelf && <span className="shrink-0 text-xs text-muted-foreground">(this node)</span>}
+            </div>
+            <div className="truncate font-mono text-xs text-muted-foreground" title={node.url}>
+              {node.url}
+            </div>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 pl-12 sm:pl-0 sm:pt-0.5">
+          <NodeTypeBadge type={node.type} />
+          <NodeStateBadge state={node.state} />
+          {showMenu && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => onRemove(node)}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Remove Node
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
+      </div>
+
+      {/* Meta: IPs, up since, last seen */}
+      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t pt-3 sm:grid-cols-4">
+        <div className="col-span-2">
+          <div className="mb-1 text-xs text-muted-foreground">IP Addresses</div>
+          {node.ipAddresses && node.ipAddresses.length > 0 ? (
+            <div className="flex min-w-0 flex-wrap gap-1">
+              {node.ipAddresses.map((ip) => (
+                <span
+                  key={ip}
+                  className="max-w-full break-all rounded bg-muted px-1.5 py-0.5 font-mono text-xs"
+                >
+                  {ip}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="text-sm text-muted-foreground">—</span>
+          )}
+        </div>
+        <div>
+          <div className="mb-1 text-xs text-muted-foreground">Up Since</div>
+          <div className="text-sm">{formatDateTime(node.upSince)}</div>
+        </div>
+        <div>
+          <div className="mb-1 text-xs text-muted-foreground">Last Seen</div>
+          <div className="text-sm">{isSelf ? 'Now' : formatDateTime(node.lastSeen)}</div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -645,7 +740,7 @@ export default function Cluster() {
                       <div className="flex items-center gap-2 mb-1">
                         <Server className="h-4 w-4 text-green-600 dark:text-green-400" />
                         <span className="text-xs font-medium text-green-900 dark:text-green-100">
-                          Cluster Nodes
+                          Total Nodes
                         </span>
                       </div>
                       <div className="text-2xl font-bold text-green-900 dark:text-green-50">
@@ -743,79 +838,24 @@ export default function Cluster() {
             </CardContent>
           </Card>
 
-          {/* Nodes Table (only when initialized) */}
+          {/* Nodes List (only when initialized) */}
           {isInitialized && !isLoading && nodes.length > 0 && (
             <Card>
-              <CardContent className="p-0">
-                <div className="flex items-center justify-between p-4 border-b">
-                  <h3 className="font-semibold">Cluster Nodes</h3>
-                </div>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Node</TableHead>
-                        <TableHead>IP Address</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>State</TableHead>
-                        <TableHead>Up Since</TableHead>
-                        <TableHead>Last Seen</TableHead>
-                        {isPrimary && <TableHead className="w-[50px]"></TableHead>}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {nodes.map((node) => (
-                        <TableRow key={node.id} className="group">
-                          <TableCell>
-                            <div className="font-medium">{node.name}</div>
-                            <div className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">
-                              {node.url}
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">
-                            {node.ipAddresses?.join(', ') || '-'}
-                          </TableCell>
-                          <TableCell>
-                            <NodeTypeBadge type={node.type} />
-                          </TableCell>
-                          <TableCell>
-                            <NodeStateBadge state={node.state} />
-                          </TableCell>
-                          <TableCell className="text-sm">{formatDateTime(node.upSince)}</TableCell>
-                          <TableCell className="text-sm">
-                            {node.state === 'Self' ? 'Now' : formatDateTime(node.lastSeen)}
-                          </TableCell>
-                          {isPrimary && (
-                            <TableCell>
-                              {node.type === 'Secondary' && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                      <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                      className="text-destructive focus:text-destructive"
-                                      onClick={() => setRemoveNodeOpen(node)}
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Remove Node
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              )}
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Cluster Nodes</CardTitle>
+                <CardDescription>
+                  {nodes.length} {nodes.length === 1 ? 'node' : 'nodes'} in this cluster
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {nodes.map((node) => (
+                  <NodeCard
+                    key={node.id}
+                    node={node}
+                    canManage={isPrimary}
+                    onRemove={setRemoveNodeOpen}
+                  />
+                ))}
               </CardContent>
             </Card>
           )}
