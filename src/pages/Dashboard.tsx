@@ -22,6 +22,13 @@ import {
 import type { ChartConfig } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -136,6 +143,16 @@ interface StatsResponse {
 }
 
 type TimeRange = StatsType;
+
+// The preset ranges, rendered as tabs on sm+ and as a dropdown menu on
+// phones, where the six-segment bar would swallow a whole row of the card.
+const TIME_RANGE_OPTIONS: Array<{ value: TimeRange; label: string }> = [
+  { value: "LastHour", label: "Hour" },
+  { value: "LastDay", label: "Day" },
+  { value: "LastWeek", label: "Week" },
+  { value: "LastMonth", label: "Month" },
+  { value: "LastYear", label: "Year" },
+];
 
 const AUTO_REFRESH_INTERVAL_MS = 10_000;
 const AUTO_REFRESH_STORAGE_KEY = "isotope_dashboard_autorefresh";
@@ -364,6 +381,9 @@ export default function Dashboard() {
   } | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
   const customTabRef = useRef<HTMLButtonElement>(null);
+  // Set when Custom… is picked from the mobile menu, so the menu's close
+  // handler knows to hand off to the range popover (see onCloseAutoFocus).
+  const openCustomFromMenuRef = useRef(false);
   const [autoRefresh, setAutoRefresh] = useState(
     () => localStorage.getItem(AUTO_REFRESH_STORAGE_KEY) === "true",
   );
@@ -709,13 +729,12 @@ export default function Dashboard() {
       {/* Main Line Chart */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <CardTitle className="text-base font-semibold">
               Query Statistics
             </CardTitle>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div className="ml-auto flex items-center gap-2">
               <span
-                className="self-start sm:self-auto"
                 title={
                   isCustomRange
                     ? "Live refresh is unavailable for a custom range"
@@ -752,52 +771,87 @@ export default function Dashboard() {
                 </Button>
               </span>
               <Popover open={customOpen} onOpenChange={setCustomOpen}>
-                <Tabs value={timeRange} onValueChange={handleTimeRangeChange}>
-                  <PopoverAnchor asChild>
-                    <TabsList className="h-8 sm:h-9 w-full sm:w-auto grid grid-cols-6 sm:flex">
-                      <TabsTrigger
-                        value="LastHour"
-                        className="text-xs px-2 sm:px-3"
+                <PopoverAnchor asChild>
+                  <div className="flex items-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1 px-2.5 text-xs sm:hidden"
+                        >
+                          {TIME_RANGE_OPTIONS.find(
+                            (option) => option.value === timeRange,
+                          )?.label ?? "Custom"}
+                          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        onCloseAutoFocus={(event) => {
+                          // Open the range popover only once the menu has fully
+                          // closed, and keep the menu from returning focus to
+                          // its trigger — that focus shift would land outside
+                          // the popover and immediately dismiss it.
+                          if (openCustomFromMenuRef.current) {
+                            openCustomFromMenuRef.current = false;
+                            event.preventDefault();
+                            setCustomOpen(true);
+                          }
+                        }}
                       >
-                        Hour
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="LastDay"
-                        className="text-xs px-2 sm:px-3"
-                      >
-                        Day
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="LastWeek"
-                        className="text-xs px-2 sm:px-3"
-                      >
-                        Week
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="LastMonth"
-                        className="text-xs px-2 sm:px-3"
-                      >
-                        Month
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="LastYear"
-                        className="text-xs px-2 sm:px-3"
-                      >
-                        Year
-                      </TabsTrigger>
-                      <TabsTrigger
-                        ref={customTabRef}
-                        value="Custom"
-                        aria-haspopup="dialog"
-                        aria-expanded={customOpen}
-                        onClick={() => setCustomOpen((open) => !open)}
-                        className="text-xs px-2 sm:px-3"
-                      >
-                        Custom
-                      </TabsTrigger>
-                    </TabsList>
-                  </PopoverAnchor>
-                </Tabs>
+                        <DropdownMenuRadioGroup
+                          value={timeRange}
+                          onValueChange={handleTimeRangeChange}
+                        >
+                          {TIME_RANGE_OPTIONS.map((option) => (
+                            <DropdownMenuRadioItem
+                              key={option.value}
+                              value={option.value}
+                            >
+                              {option.label}
+                            </DropdownMenuRadioItem>
+                          ))}
+                          <DropdownMenuRadioItem
+                            value="Custom"
+                            onSelect={() => {
+                              openCustomFromMenuRef.current = true;
+                            }}
+                          >
+                            Custom…
+                          </DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Tabs
+                      value={timeRange}
+                      onValueChange={handleTimeRangeChange}
+                      className="hidden sm:flex"
+                    >
+                      <TabsList className="h-9">
+                        {TIME_RANGE_OPTIONS.map((option) => (
+                          <TabsTrigger
+                            key={option.value}
+                            value={option.value}
+                            className="text-xs px-3"
+                          >
+                            {option.label}
+                          </TabsTrigger>
+                        ))}
+                        <TabsTrigger
+                          ref={customTabRef}
+                          value="Custom"
+                          aria-haspopup="dialog"
+                          aria-expanded={customOpen}
+                          onClick={() => setCustomOpen((open) => !open)}
+                          className="text-xs px-3"
+                        >
+                          Custom
+                        </TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </div>
+                </PopoverAnchor>
                 <PopoverContent
                   align="end"
                   className="w-auto p-3"
