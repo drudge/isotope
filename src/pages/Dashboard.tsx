@@ -13,7 +13,13 @@ import {
   Legend,
   Tooltip,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   ChartContainer,
   ChartTooltip,
@@ -41,11 +47,12 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
-import { getStats, type StatsType } from "@/api/dns";
+import { getStats, type StatsType, type TopStatsType } from "@/api/dns";
 import type { ApiResponse } from "@/types/api";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
 import QueryLogsModal from "@/components/QueryLogsModal";
+import TopStatsDialog from "@/components/TopStatsDialog";
 
 // Stat box component matching Technitium's colored boxes
 interface StatBoxProps {
@@ -326,7 +333,7 @@ function CustomRangeFields({
         captionLayout="dropdown"
         startMonth={startMonth}
         endMonth={endMonth}
-        className="p-0"
+        className="p-0 mx-auto"
       />
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="grid gap-1.5">
@@ -388,6 +395,7 @@ export default function Dashboard() {
     () => localStorage.getItem(AUTO_REFRESH_STORAGE_KEY) === "true",
   );
   const [expandedLists, setExpandedLists] = useState(false);
+  const [topStatsOpen, setTopStatsOpen] = useState<TopStatsType | null>(null);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [logsModalFilter, setLogsModalFilter] = useState<{
     responseType?: string;
@@ -854,7 +862,7 @@ export default function Dashboard() {
                 </PopoverAnchor>
                 <PopoverContent
                   align="end"
-                  className="w-auto p-3"
+                  className="w-72 max-w-[92vw] p-3 sm:w-auto"
                   onInteractOutside={(event) => {
                     // The Custom tab toggles the popover itself. Without this,
                     // dismiss-on-outside-press would close it a beat before that
@@ -1069,6 +1077,16 @@ export default function Dashboard() {
               <CardTitle className="text-base font-semibold">
                 Top Clients
               </CardTitle>
+              <CardAction>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 -my-1 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setTopStatsOpen("TopClients")}
+                >
+                  View all <ChevronRight className="ml-0.5 h-3 w-3" />
+                </Button>
+              </CardAction>
             </CardHeader>
             <CardContent className="px-0 flex-1 flex flex-col">
               {statsLoading ? (
@@ -1144,6 +1162,16 @@ export default function Dashboard() {
               <CardTitle className="text-base font-semibold">
                 Top Domains
               </CardTitle>
+              <CardAction>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 -my-1 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setTopStatsOpen("TopDomains")}
+                >
+                  View all <ChevronRight className="ml-0.5 h-3 w-3" />
+                </Button>
+              </CardAction>
             </CardHeader>
             <CardContent className="px-0 flex-1 flex flex-col">
               {statsLoading ? (
@@ -1217,6 +1245,16 @@ export default function Dashboard() {
               <CardTitle className="text-base font-semibold">
                 Top Blocked Domains
               </CardTitle>
+              <CardAction>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 -my-1 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setTopStatsOpen("TopBlockedDomains")}
+                >
+                  View all <ChevronRight className="ml-0.5 h-3 w-3" />
+                </Button>
+              </CardAction>
             </CardHeader>
             <CardContent className="px-0 flex-1 flex flex-col">
               {statsLoading ? (
@@ -1472,6 +1510,16 @@ export default function Dashboard() {
         onClose={() => setShowLogsModal(false)}
         initialFilter={logsModalFilter}
       />
+
+      {topStatsOpen && (
+        <TopStatsDialog
+          open
+          onClose={() => setTopStatsOpen(null)}
+          statsType={topStatsOpen}
+          timeRange={timeRange}
+          customRange={appliedCustomRange}
+        />
+      )}
     </div>
   );
 }

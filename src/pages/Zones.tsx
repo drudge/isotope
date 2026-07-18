@@ -116,9 +116,38 @@ const recordTypes = [
   "SRV",
   "CAA",
   "PTR",
+  "ANAME",
+  "DS",
+  "SSHFP",
+  "TLSA",
+  "SVCB",
+  "HTTPS",
+  "URI",
+  "NAPTR",
   "APP",
   "FWD",
 ];
+
+const DS_ALGORITHMS = [
+  "RSAMD5",
+  "DSA",
+  "RSASHA1",
+  "DSA-NSEC3-SHA1",
+  "RSASHA1-NSEC3-SHA1",
+  "RSASHA256",
+  "RSASHA512",
+  "ECC-GOST",
+  "ECDSAP256SHA256",
+  "ECDSAP384SHA384",
+  "ED25519",
+  "ED448",
+];
+const DS_DIGEST_TYPES = ["SHA1", "SHA256", "SHA384", "GOST-R-34-11-94"];
+const SSHFP_ALGORITHMS = ["RSA", "DSA", "ECDSA", "Ed25519", "Ed448"];
+const SSHFP_FINGERPRINT_TYPES = ["SHA1", "SHA256"];
+const TLSA_CERTIFICATE_USAGES = ["PKIX-TA", "PKIX-EE", "DANE-TA", "DANE-EE"];
+const TLSA_SELECTORS = ["Cert", "SPKI"];
+const TLSA_MATCHING_TYPES = ["Full", "SHA2-256", "SHA2-512"];
 
 // Zone types that support each management action.
 const RESYNC_TYPES = new Set<Zone["type"]>([
@@ -247,6 +276,29 @@ function ZoneStatusBadge({ zone }: { zone: Zone }) {
   );
 }
 
+// Server enums serialize with underscores where the API's request parameters
+// expect hyphens (PKIX_TA vs PKIX-TA, SHA2_256 vs SHA2-256); normalize on
+// read so values round-trip through the form selects and delete/update calls.
+function enumToDashed(value: unknown, fallback = ""): string {
+  return String(value ?? "").replace(/_/g, "-") || fallback;
+}
+
+// rData carries svcParams as an object; the API's svcParams request parameter
+// wants a pipe-separated key|value list ("alpn|h2,h3|port|443").
+function svcParamsToPipe(params: unknown): string {
+  if (!params || typeof params !== "object") return "";
+  return Object.entries(params as Record<string, unknown>)
+    .flatMap(([key, value]) => [key, String(value)])
+    .join("|");
+}
+
+function formatSvcParams(params: unknown): string {
+  if (!params || typeof params !== "object") return "";
+  return Object.entries(params as Record<string, unknown>)
+    .map(([key, value]) => (value === "" ? key : `${key}=${value}`))
+    .join(" ");
+}
+
 function formatRData(record: DnsRecord): string {
   const rData = record.rData;
   switch (record.type) {
@@ -271,6 +323,23 @@ function formatRData(record: DnsRecord): string {
       return `${rData.appName || ""} (${rData.classPath || ""})`;
     case "FWD":
       return `${String(rData.protocol || "UDP").toUpperCase()}: ${rData.forwarder || ""}`;
+    case "ANAME":
+      return String(rData.aname || "");
+    case "DS":
+      return `${rData.keyTag ?? 0} ${enumToDashed(rData.algorithm)} ${enumToDashed(rData.digestType)} ${rData.digest || ""}`;
+    case "SSHFP":
+      return `${enumToDashed(rData.algorithm)} ${enumToDashed(rData.fingerprintType)} ${rData.fingerprint || ""}`;
+    case "TLSA":
+      return `${enumToDashed(rData.certificateUsage)} ${enumToDashed(rData.selector)} ${enumToDashed(rData.matchingType)} ${rData.certificateAssociationData || ""}`;
+    case "SVCB":
+    case "HTTPS": {
+      const params = formatSvcParams(rData.svcParams);
+      return `${rData.svcPriority ?? 0} ${rData.svcTargetName || "."}${params ? ` ${params}` : ""}`;
+    }
+    case "URI":
+      return `${rData.priority ?? 0} ${rData.weight ?? 0} ${rData.uri || ""}`;
+    case "NAPTR":
+      return `${rData.order ?? 0} ${rData.preference ?? 0} "${rData.flags || ""}" "${rData.services || ""}" "${rData.regexp || ""}" ${rData.replacement || "."}`;
     default:
       return JSON.stringify(rData);
   }
@@ -311,6 +380,167 @@ interface RecordFormData {
   proxyPort?: string;
   proxyUsername?: string;
   proxyPassword?: string;
+  // DS record specific fields
+  keyTag?: string;
+  algorithm?: string;
+  digestType?: string;
+  digest?: string;
+  // SSHFP record specific fields
+  sshfpAlgorithm?: string;
+  sshfpFingerprintType?: string;
+  sshfpFingerprint?: string;
+  // TLSA record specific fields
+  tlsaCertificateUsage?: string;
+  tlsaSelector?: string;
+  tlsaMatchingType?: string;
+  tlsaCertificateAssociationData?: string;
+  // SVCB/HTTPS record specific fields (svcParams as pipe-separated key|value)
+  svcPriority?: string;
+  svcTargetName?: string;
+  svcParams?: string;
+  autoIpv4Hint?: boolean;
+  autoIpv6Hint?: boolean;
+  // URI record specific fields
+  uriPriority?: string;
+  uriWeight?: string;
+  uri?: string;
+  // NAPTR record specific fields
+  naptrOrder?: string;
+  naptrPreference?: string;
+  naptrFlags?: string;
+  naptrServices?: string;
+  naptrRegexp?: string;
+  naptrReplacement?: string;
+}
+
+// Required fields per record type; gates both the Add button and submission.
+function isAddFormComplete(data: RecordFormData): boolean {
+  if (!data.name.trim()) return false;
+  switch (data.type) {
+    case "APP":
+      return Boolean(data.appName?.trim() && data.classPath?.trim());
+    case "SOA":
+      return Boolean(
+        data.primaryNameServer?.trim() && data.responsiblePerson?.trim(),
+      );
+    case "FWD":
+      return Boolean(data.forwarder?.trim());
+    case "DS":
+      return Boolean(data.keyTag?.trim() && data.digest?.trim());
+    case "SSHFP":
+      return Boolean(data.sshfpFingerprint?.trim());
+    case "TLSA":
+      return Boolean(data.tlsaCertificateAssociationData?.trim());
+    case "SVCB":
+    case "HTTPS":
+      return Boolean(data.svcTargetName?.trim());
+    case "URI":
+      return Boolean(data.uri?.trim());
+    case "NAPTR":
+      // Order and preference default to 0; the string fields may be empty.
+      return true;
+    default:
+      return Boolean(data.value.trim());
+  }
+}
+
+// Builds the edit-form state for a record. Reads the server's rData property
+// names, which differ from the API's request parameter names for several
+// types (SSHFP returns algorithm/fingerprintType/fingerprint, TLSA returns
+// certificateUsage/selector/..., URI returns priority/weight, NAPTR returns
+// order/preference/...).
+function toEditData(
+  record: DnsRecord,
+): RecordFormData & { original: DnsRecord } {
+  const rData = record.rData;
+  const editData: RecordFormData & { original: DnsRecord } = {
+    original: record,
+    type: record.type,
+    name: record.name,
+    ttl: record.ttl.toString(),
+    value: formatRData(record),
+    comments: record.comments || "",
+    expiryTtl: record.expiryTtl?.toString() || "0",
+    ptr: false,
+    createPtrZone: false,
+    disabled: record.disabled,
+  };
+
+  if (record.type === "APP") {
+    editData.appName = String(rData.appName || "");
+    editData.classPath = String(rData.classPath || "");
+    editData.recordData = String(rData.recordData || "");
+  }
+
+  if (record.type === "SOA") {
+    editData.primaryNameServer = String(rData.primaryNameServer || "");
+    editData.responsiblePerson = String(rData.responsiblePerson || "");
+    editData.serial = String(rData.serial || "");
+    editData.refresh = String(rData.refresh || "");
+    editData.retry = String(rData.retry || "");
+    editData.expire = String(rData.expire || "");
+    editData.minimum = String(rData.minimum || "");
+    editData.useSerialDateScheme = Boolean(rData.useSerialDateScheme);
+  }
+
+  if (record.type === "FWD") {
+    editData.protocol = String(rData.protocol || "Udp");
+    editData.forwarder = String(rData.forwarder || "");
+    editData.forwarderPriority = String(rData.forwarderPriority || "0");
+    editData.dnssecValidation = Boolean(rData.dnssecValidation);
+    editData.proxyType = String(rData.proxyType || "DefaultProxy");
+    editData.proxyAddress = String(rData.proxyAddress || "");
+    editData.proxyPort = String(rData.proxyPort || "");
+    editData.proxyUsername = String(rData.proxyUsername || "");
+    editData.proxyPassword = String(rData.proxyPassword || "");
+  }
+
+  if (record.type === "DS") {
+    editData.keyTag = String(rData.keyTag ?? "");
+    editData.algorithm = enumToDashed(rData.algorithm, "ECDSAP256SHA256");
+    editData.digestType = enumToDashed(rData.digestType, "SHA256");
+    editData.digest = String(rData.digest || "");
+  }
+
+  if (record.type === "SSHFP") {
+    editData.sshfpAlgorithm = enumToDashed(rData.algorithm, "Ed25519");
+    editData.sshfpFingerprintType = enumToDashed(rData.fingerprintType, "SHA256");
+    editData.sshfpFingerprint = String(rData.fingerprint || "");
+  }
+
+  if (record.type === "TLSA") {
+    editData.tlsaCertificateUsage = enumToDashed(rData.certificateUsage, "DANE-EE");
+    editData.tlsaSelector = enumToDashed(rData.selector, "SPKI");
+    editData.tlsaMatchingType = enumToDashed(rData.matchingType, "SHA2-256");
+    editData.tlsaCertificateAssociationData = String(
+      rData.certificateAssociationData || "",
+    );
+  }
+
+  if (record.type === "SVCB" || record.type === "HTTPS") {
+    editData.svcPriority = String(rData.svcPriority ?? "1");
+    editData.svcTargetName = String(rData.svcTargetName || "");
+    editData.svcParams = svcParamsToPipe(rData.svcParams);
+    editData.autoIpv4Hint = Boolean(rData.autoIpv4Hint);
+    editData.autoIpv6Hint = Boolean(rData.autoIpv6Hint);
+  }
+
+  if (record.type === "URI") {
+    editData.uriPriority = String(rData.priority ?? "0");
+    editData.uriWeight = String(rData.weight ?? "0");
+    editData.uri = String(rData.uri || "");
+  }
+
+  if (record.type === "NAPTR") {
+    editData.naptrOrder = String(rData.order ?? "0");
+    editData.naptrPreference = String(rData.preference ?? "0");
+    editData.naptrFlags = String(rData.flags || "");
+    editData.naptrServices = String(rData.services || "");
+    editData.naptrRegexp = String(rData.regexp || "");
+    editData.naptrReplacement = String(rData.replacement || "");
+  }
+
+  return editData;
 }
 
 function RecordForm({
@@ -346,6 +576,8 @@ function RecordForm({
         return "Target Host";
       case "CAA":
         return "CA Domain";
+      case "ANAME":
+        return "Target Host";
       default:
         return "Value";
     }
@@ -369,6 +601,8 @@ function RecordForm({
         return "example.com";
       case "SRV":
         return "server.example.com";
+      case "ANAME":
+        return "target.example.com";
       default:
         return "";
     }
@@ -400,6 +634,22 @@ function RecordForm({
         return "DNS application record";
       case "FWD":
         return "Conditional forwarder record";
+      case "ANAME":
+        return "Resolves the target's A/AAAA records in place (CNAME flattening)";
+      case "DS":
+        return "Delegation signer digest for a DNSSEC-signed child zone";
+      case "SSHFP":
+        return "Publishes SSH host key fingerprints";
+      case "TLSA":
+        return "Associates a TLS certificate with a service (DANE)";
+      case "SVCB":
+        return "Service binding with connection parameters";
+      case "HTTPS":
+        return "HTTPS service binding with connection parameters";
+      case "URI":
+        return "Maps a domain to a URI";
+      case "NAPTR":
+        return "Rule-based rewrite record (ENUM/SIP)";
       default:
         return "";
     }
@@ -506,10 +756,11 @@ function RecordForm({
               </div>
             )}
 
-            {/* CNAME/NS/PTR Records */}
+            {/* CNAME/NS/PTR/ANAME Records */}
             {(data.type === "CNAME" ||
               data.type === "NS" ||
-              data.type === "PTR") && (
+              data.type === "PTR" ||
+              data.type === "ANAME") && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium">{getValueLabel()}</Label>
                 <Input
@@ -699,6 +950,443 @@ function RecordForm({
                       onChange({ ...data, value: parts.join(" ").trim() });
                     }}
                   />
+                </div>
+              </div>
+            )}
+
+            {/* DS Record */}
+            {data.type === "DS" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Key Tag
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="12345"
+                      value={data.keyTag || ""}
+                      onChange={(e) =>
+                        onChange({ ...data, keyTag: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Algorithm
+                    </Label>
+                    <Select
+                      value={data.algorithm || "ECDSAP256SHA256"}
+                      onValueChange={(v) => onChange({ ...data, algorithm: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DS_ALGORITHMS.map((alg) => (
+                          <SelectItem key={alg} value={alg}>
+                            {alg}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Digest Type
+                    </Label>
+                    <Select
+                      value={data.digestType || "SHA256"}
+                      onValueChange={(v) =>
+                        onChange({ ...data, digestType: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DS_DIGEST_TYPES.map((dt) => (
+                          <SelectItem key={dt} value={dt}>
+                            {dt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Digest</Label>
+                  <Input
+                    placeholder="Hex digest of the child zone's KSK DNSKEY"
+                    value={data.digest || ""}
+                    onChange={(e) =>
+                      onChange({ ...data, digest: e.target.value })
+                    }
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* SSHFP Record */}
+            {data.type === "SSHFP" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Algorithm
+                    </Label>
+                    <Select
+                      value={data.sshfpAlgorithm || "Ed25519"}
+                      onValueChange={(v) =>
+                        onChange({ ...data, sshfpAlgorithm: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SSHFP_ALGORITHMS.map((alg) => (
+                          <SelectItem key={alg} value={alg}>
+                            {alg}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Fingerprint Type
+                    </Label>
+                    <Select
+                      value={data.sshfpFingerprintType || "SHA256"}
+                      onValueChange={(v) =>
+                        onChange({ ...data, sshfpFingerprintType: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SSHFP_FINGERPRINT_TYPES.map((ft) => (
+                          <SelectItem key={ft} value={ft}>
+                            {ft}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Fingerprint</Label>
+                  <Input
+                    placeholder="Hex fingerprint of the host key"
+                    value={data.sshfpFingerprint || ""}
+                    onChange={(e) =>
+                      onChange({ ...data, sshfpFingerprint: e.target.value })
+                    }
+                    className="font-mono"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* TLSA Record */}
+            {data.type === "TLSA" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Certificate Usage
+                    </Label>
+                    <Select
+                      value={data.tlsaCertificateUsage || "DANE-EE"}
+                      onValueChange={(v) =>
+                        onChange({ ...data, tlsaCertificateUsage: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TLSA_CERTIFICATE_USAGES.map((usage) => (
+                          <SelectItem key={usage} value={usage}>
+                            {usage}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Selector
+                    </Label>
+                    <Select
+                      value={data.tlsaSelector || "SPKI"}
+                      onValueChange={(v) =>
+                        onChange({ ...data, tlsaSelector: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TLSA_SELECTORS.map((sel) => (
+                          <SelectItem key={sel} value={sel}>
+                            {sel}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Matching Type
+                    </Label>
+                    <Select
+                      value={data.tlsaMatchingType || "SHA2-256"}
+                      onValueChange={(v) =>
+                        onChange({ ...data, tlsaMatchingType: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TLSA_MATCHING_TYPES.map((mt) => (
+                          <SelectItem key={mt} value={mt}>
+                            {mt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">
+                    Certificate Association Data
+                  </Label>
+                  <textarea
+                    className="w-full min-h-[80px] px-3 py-2 text-sm rounded-md border border-input bg-background font-mono resize-y"
+                    placeholder="Hex digest, or a PEM certificate to hash"
+                    value={data.tlsaCertificateAssociationData || ""}
+                    onChange={(e) =>
+                      onChange({
+                        ...data,
+                        tlsaCertificateAssociationData: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* SVCB/HTTPS Records */}
+            {(data.type === "SVCB" || data.type === "HTTPS") && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <div className="space-y-2 sm:col-span-3">
+                    <Label className="text-sm font-medium">Target Name</Label>
+                    <Input
+                      placeholder={`svc.example.com, or "." for this name`}
+                      value={data.svcTargetName || ""}
+                      onChange={(e) =>
+                        onChange({ ...data, svcTargetName: e.target.value })
+                      }
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Priority</Label>
+                    <Input
+                      type="number"
+                      placeholder="1"
+                      value={data.svcPriority || ""}
+                      onChange={(e) =>
+                        onChange({ ...data, svcPriority: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">
+                    Service Parameters
+                  </Label>
+                  <Input
+                    placeholder="alpn|h2,h3|port|443"
+                    value={data.svcParams || ""}
+                    onChange={(e) =>
+                      onChange({ ...data, svcParams: e.target.value })
+                    }
+                    className="font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Pipe-separated key and value pairs. Priority 0 makes this
+                    an alias record.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="autoIpv4Hint"
+                      checked={data.autoIpv4Hint || false}
+                      onCheckedChange={(checked) =>
+                        onChange({ ...data, autoIpv4Hint: checked === true })
+                      }
+                    />
+                    <Label
+                      htmlFor="autoIpv4Hint"
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      Automatic ipv4hint
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="autoIpv6Hint"
+                      checked={data.autoIpv6Hint || false}
+                      onCheckedChange={(checked) =>
+                        onChange({ ...data, autoIpv6Hint: checked === true })
+                      }
+                    />
+                    <Label
+                      htmlFor="autoIpv6Hint"
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      Automatic ipv6hint
+                    </Label>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* URI Record */}
+            {data.type === "URI" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">URI</Label>
+                  <Input
+                    placeholder="https://www.example.com/"
+                    value={data.uri || ""}
+                    onChange={(e) => onChange({ ...data, uri: e.target.value })}
+                    className="font-mono"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Priority
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={data.uriPriority || ""}
+                      onChange={(e) =>
+                        onChange({ ...data, uriPriority: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Weight
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={data.uriWeight || ""}
+                      onChange={(e) =>
+                        onChange({ ...data, uriWeight: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* NAPTR Record */}
+            {data.type === "NAPTR" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Order
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={data.naptrOrder || ""}
+                      onChange={(e) =>
+                        onChange({ ...data, naptrOrder: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Preference
+                    </Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={data.naptrPreference || ""}
+                      onChange={(e) =>
+                        onChange({ ...data, naptrPreference: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Flags
+                    </Label>
+                    <Input
+                      placeholder="S, A, U, P"
+                      value={data.naptrFlags || ""}
+                      onChange={(e) =>
+                        onChange({ ...data, naptrFlags: e.target.value })
+                      }
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Services
+                    </Label>
+                    <Input
+                      placeholder="E2U+sip"
+                      value={data.naptrServices || ""}
+                      onChange={(e) =>
+                        onChange({ ...data, naptrServices: e.target.value })
+                      }
+                      className="font-mono"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Regexp
+                    </Label>
+                    <Input
+                      placeholder="!^.*$!sip:info@example.com!"
+                      value={data.naptrRegexp || ""}
+                      onChange={(e) =>
+                        onChange({ ...data, naptrRegexp: e.target.value })
+                      }
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Replacement
+                    </Label>
+                    <Input
+                      placeholder="Domain, or empty when regexp is set"
+                      value={data.naptrReplacement || ""}
+                      onChange={(e) =>
+                        onChange({ ...data, naptrReplacement: e.target.value })
+                      }
+                      className="font-mono"
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -1238,51 +1926,8 @@ function ZoneRecordsView({
       return;
     }
 
-    const value = formatRData(record);
-    const editData: RecordFormData & { original: DnsRecord } = {
-      original: record,
-      type: record.type,
-      name: record.name,
-      ttl: record.ttl.toString(),
-      value,
-      comments: record.comments || "",
-      expiryTtl: record.expiryTtl?.toString() || "0",
-      ptr: false,
-      createPtrZone: false,
-      disabled: record.disabled,
-    };
-
-    if (record.type === "APP") {
-      editData.appName = String(record.rData.appName || "");
-      editData.classPath = String(record.rData.classPath || "");
-      editData.recordData = String(record.rData.recordData || "");
-    }
-
-    if (record.type === "SOA") {
-      editData.primaryNameServer = String(record.rData.primaryNameServer || "");
-      editData.responsiblePerson = String(record.rData.responsiblePerson || "");
-      editData.serial = String(record.rData.serial || "");
-      editData.refresh = String(record.rData.refresh || "");
-      editData.retry = String(record.rData.retry || "");
-      editData.expire = String(record.rData.expire || "");
-      editData.minimum = String(record.rData.minimum || "");
-      editData.useSerialDateScheme = Boolean(record.rData.useSerialDateScheme);
-    }
-
-    if (record.type === "FWD") {
-      editData.protocol = String(record.rData.protocol || "Udp");
-      editData.forwarder = String(record.rData.forwarder || "");
-      editData.forwarderPriority = String(record.rData.forwarderPriority || "0");
-      editData.dnssecValidation = Boolean(record.rData.dnssecValidation);
-      editData.proxyType = String(record.rData.proxyType || "DefaultProxy");
-      editData.proxyAddress = String(record.rData.proxyAddress || "");
-      editData.proxyPort = String(record.rData.proxyPort || "");
-      editData.proxyUsername = String(record.rData.proxyUsername || "");
-      editData.proxyPassword = String(record.rData.proxyPassword || "");
-    }
-
     setInitialEditHandled(true);
-    setEditRecord(editData);
+    setEditRecord(toEditData(record));
     setIsEditOpen(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [records.length, initialEditHandled]);
@@ -1300,21 +1945,7 @@ function ZoneRecordsView({
   const availableRecordTypes = [...new Set(records.map((r) => r.type))].sort();
 
   const handleAddRecord = async () => {
-    // Validation: Different record types need different fields
-    if (!newRecord.name.trim()) return;
-    if (newRecord.type === "APP") {
-      if (!newRecord.appName?.trim() || !newRecord.classPath?.trim()) return;
-    } else if (newRecord.type === "SOA") {
-      if (
-        !newRecord.primaryNameServer?.trim() ||
-        !newRecord.responsiblePerson?.trim()
-      )
-        return;
-    } else if (newRecord.type === "FWD") {
-      if (!newRecord.forwarder?.trim()) return;
-    } else {
-      if (!newRecord.value.trim()) return;
-    }
+    if (!isAddFormComplete(newRecord)) return;
 
     setIsSubmitting(true);
 
@@ -1399,6 +2030,61 @@ function ZoneRecordsView({
           rdata.proxyPassword = newRecord.proxyPassword;
         }
         break;
+      case "ANAME":
+        rdata = { aname: newRecord.value };
+        break;
+      case "DS":
+        rdata = {
+          keyTag: newRecord.keyTag || "0",
+          algorithm: newRecord.algorithm || "ECDSAP256SHA256",
+          digestType: newRecord.digestType || "SHA256",
+          digest: newRecord.digest || "",
+        };
+        break;
+      case "SSHFP":
+        rdata = {
+          sshfpAlgorithm: newRecord.sshfpAlgorithm || "Ed25519",
+          sshfpFingerprintType: newRecord.sshfpFingerprintType || "SHA256",
+          sshfpFingerprint: newRecord.sshfpFingerprint || "",
+        };
+        break;
+      case "TLSA":
+        rdata = {
+          tlsaCertificateUsage: newRecord.tlsaCertificateUsage || "DANE-EE",
+          tlsaSelector: newRecord.tlsaSelector || "SPKI",
+          tlsaMatchingType: newRecord.tlsaMatchingType || "SHA2-256",
+          tlsaCertificateAssociationData:
+            newRecord.tlsaCertificateAssociationData || "",
+        };
+        break;
+      case "SVCB":
+      case "HTTPS":
+        // svcParams "false" means an empty parameter list.
+        rdata = {
+          svcPriority: newRecord.svcPriority || "1",
+          svcTargetName: newRecord.svcTargetName || "",
+          svcParams: newRecord.svcParams?.trim() || "false",
+        };
+        if (newRecord.autoIpv4Hint) rdata.autoIpv4Hint = "true";
+        if (newRecord.autoIpv6Hint) rdata.autoIpv6Hint = "true";
+        break;
+      case "URI":
+        rdata = {
+          uriPriority: newRecord.uriPriority || "0",
+          uriWeight: newRecord.uriWeight || "0",
+          uri: newRecord.uri || "",
+        };
+        break;
+      case "NAPTR":
+        rdata = {
+          naptrOrder: newRecord.naptrOrder || "0",
+          naptrPreference: newRecord.naptrPreference || "0",
+          naptrFlags: newRecord.naptrFlags || "",
+          naptrServices: newRecord.naptrServices || "",
+          naptrRegexp: newRecord.naptrRegexp || "",
+          naptrReplacement: newRecord.naptrReplacement || "",
+        };
+        break;
       default:
         rdata = { value: newRecord.value };
     }
@@ -1445,59 +2131,12 @@ function ZoneRecordsView({
   };
 
   const handleEditClick = (record: DnsRecord) => {
-    const value = formatRData(record);
-    const editData: RecordFormData & { original: DnsRecord } = {
-      original: record,
-      type: record.type,
-      name: record.name,
-      ttl: record.ttl.toString(),
-      value,
-      comments: record.comments || "",
-      expiryTtl: record.expiryTtl?.toString() || "0",
-      ptr: false,
-      createPtrZone: false,
-      disabled: record.disabled,
-    };
-
-    // Add APP-specific fields
-    if (record.type === "APP") {
-      editData.appName = String(record.rData.appName || "");
-      editData.classPath = String(record.rData.classPath || "");
-      editData.recordData = String(record.rData.recordData || "");
-    }
-
-    // Add SOA-specific fields
-    if (record.type === "SOA") {
-      editData.primaryNameServer = String(record.rData.primaryNameServer || "");
-      editData.responsiblePerson = String(record.rData.responsiblePerson || "");
-      editData.serial = String(record.rData.serial || "");
-      editData.refresh = String(record.rData.refresh || "");
-      editData.retry = String(record.rData.retry || "");
-      editData.expire = String(record.rData.expire || "");
-      editData.minimum = String(record.rData.minimum || "");
-      editData.useSerialDateScheme = Boolean(record.rData.useSerialDateScheme);
-    }
-
-    // Add FWD-specific fields
-    if (record.type === "FWD") {
-      editData.protocol = String(record.rData.protocol || "Udp");
-      editData.forwarder = String(record.rData.forwarder || "");
-      editData.forwarderPriority = String(
-        record.rData.forwarderPriority || "0",
-      );
-      editData.dnssecValidation = Boolean(record.rData.dnssecValidation);
-      editData.proxyType = String(record.rData.proxyType || "DefaultProxy");
-      editData.proxyAddress = String(record.rData.proxyAddress || "");
-      editData.proxyPort = String(record.rData.proxyPort || "");
-      editData.proxyUsername = String(record.rData.proxyUsername || "");
-      editData.proxyPassword = String(record.rData.proxyPassword || "");
-    }
-
+    const editData = toEditData(record);
     setEditRecord(editData);
     setIsEditOpen(true);
     // Update URL to reflect editing state - include value to uniquely identify the record
     navigate(
-      `/zones/${encodeURIComponent(zone.name)}/${encodeURIComponent(record.name)}/${record.type}/${encodeURIComponent(value)}/edit`,
+      `/zones/${encodeURIComponent(zone.name)}/${encodeURIComponent(record.name)}/${record.type}/${encodeURIComponent(editData.value)}/edit`,
     );
   };
 
@@ -1616,6 +2255,78 @@ function ZoneRecordsView({
           rdata.proxyPassword = editRecord.proxyPassword;
         }
         break;
+      case "ANAME":
+        rdata.aname = String(orig.aname || "");
+        rdata.newAName = editRecord.value;
+        break;
+      case "DS":
+        rdata.keyTag = String(orig.keyTag ?? "");
+        rdata.algorithm = enumToDashed(orig.algorithm);
+        rdata.digestType = enumToDashed(orig.digestType);
+        rdata.digest = String(orig.digest || "");
+        rdata.newKeyTag = editRecord.keyTag || "0";
+        rdata.newAlgorithm = editRecord.algorithm || "ECDSAP256SHA256";
+        rdata.newDigestType = editRecord.digestType || "SHA256";
+        rdata.newDigest = editRecord.digest || "";
+        break;
+      case "SSHFP":
+        rdata.sshfpAlgorithm = enumToDashed(orig.algorithm);
+        rdata.sshfpFingerprintType = enumToDashed(orig.fingerprintType);
+        rdata.sshfpFingerprint = String(orig.fingerprint || "");
+        rdata.newSshfpAlgorithm = editRecord.sshfpAlgorithm || "Ed25519";
+        rdata.newSshfpFingerprintType =
+          editRecord.sshfpFingerprintType || "SHA256";
+        rdata.newSshfpFingerprint = editRecord.sshfpFingerprint || "";
+        break;
+      case "TLSA":
+        rdata.tlsaCertificateUsage = enumToDashed(orig.certificateUsage);
+        rdata.tlsaSelector = enumToDashed(orig.selector);
+        rdata.tlsaMatchingType = enumToDashed(orig.matchingType);
+        rdata.tlsaCertificateAssociationData = String(
+          orig.certificateAssociationData || "",
+        );
+        rdata.newTlsaCertificateUsage =
+          editRecord.tlsaCertificateUsage || "DANE-EE";
+        rdata.newTlsaSelector = editRecord.tlsaSelector || "SPKI";
+        rdata.newTlsaMatchingType = editRecord.tlsaMatchingType || "SHA2-256";
+        rdata.newTlsaCertificateAssociationData =
+          editRecord.tlsaCertificateAssociationData || "";
+        break;
+      case "SVCB":
+      case "HTTPS":
+        // svcParams "false" means an empty parameter list.
+        rdata.svcPriority = String(orig.svcPriority ?? "0");
+        rdata.svcTargetName = String(orig.svcTargetName || "");
+        rdata.svcParams = svcParamsToPipe(orig.svcParams) || "false";
+        rdata.newSvcPriority = editRecord.svcPriority || "1";
+        rdata.newSvcTargetName = editRecord.svcTargetName || "";
+        rdata.newSvcParams = editRecord.svcParams?.trim() || "false";
+        if (editRecord.autoIpv4Hint) rdata.autoIpv4Hint = "true";
+        if (editRecord.autoIpv6Hint) rdata.autoIpv6Hint = "true";
+        break;
+      case "URI":
+        rdata.uriPriority = String(orig.priority ?? "0");
+        rdata.uriWeight = String(orig.weight ?? "0");
+        rdata.uri = String(orig.uri || "");
+        rdata.newUriPriority = editRecord.uriPriority || "0";
+        rdata.newUriWeight = editRecord.uriWeight || "0";
+        rdata.newUri = editRecord.uri || "";
+        break;
+      case "NAPTR":
+        // The update API uses naptrNew* names, not newNaptr*.
+        rdata.naptrOrder = String(orig.order ?? "0");
+        rdata.naptrPreference = String(orig.preference ?? "0");
+        rdata.naptrFlags = String(orig.flags || "");
+        rdata.naptrServices = String(orig.services || "");
+        rdata.naptrRegexp = String(orig.regexp || "");
+        rdata.naptrReplacement = String(orig.replacement || "");
+        rdata.naptrNewOrder = editRecord.naptrOrder || "0";
+        rdata.naptrNewPreference = editRecord.naptrPreference || "0";
+        rdata.naptrNewFlags = editRecord.naptrFlags || "";
+        rdata.naptrNewServices = editRecord.naptrServices || "";
+        rdata.naptrNewRegexp = editRecord.naptrRegexp || "";
+        rdata.naptrNewReplacement = editRecord.naptrReplacement || "";
+        break;
       default:
         toast.error(
           `Editing ${editRecord.original.type} records is not supported`,
@@ -1723,6 +2434,56 @@ function ZoneRecordsView({
       case "FWD":
         rdata.protocol = String(recordToDelete.rData.protocol || "Udp");
         rdata.forwarder = String(recordToDelete.rData.forwarder || "");
+        break;
+      case "ANAME":
+        rdata.aname = String(recordToDelete.rData.aname || "");
+        break;
+      case "DS":
+        rdata.keyTag = String(recordToDelete.rData.keyTag ?? "");
+        rdata.algorithm = enumToDashed(recordToDelete.rData.algorithm);
+        rdata.digestType = enumToDashed(recordToDelete.rData.digestType);
+        rdata.digest = String(recordToDelete.rData.digest || "");
+        break;
+      case "SSHFP":
+        rdata.sshfpAlgorithm = enumToDashed(recordToDelete.rData.algorithm);
+        rdata.sshfpFingerprintType = enumToDashed(
+          recordToDelete.rData.fingerprintType,
+        );
+        rdata.sshfpFingerprint = String(recordToDelete.rData.fingerprint || "");
+        break;
+      case "TLSA":
+        rdata.tlsaCertificateUsage = enumToDashed(
+          recordToDelete.rData.certificateUsage,
+        );
+        rdata.tlsaSelector = enumToDashed(recordToDelete.rData.selector);
+        rdata.tlsaMatchingType = enumToDashed(
+          recordToDelete.rData.matchingType,
+        );
+        rdata.tlsaCertificateAssociationData = String(
+          recordToDelete.rData.certificateAssociationData || "",
+        );
+        break;
+      case "SVCB":
+      case "HTTPS":
+        rdata.svcPriority = String(recordToDelete.rData.svcPriority ?? "0");
+        rdata.svcTargetName = String(recordToDelete.rData.svcTargetName || "");
+        rdata.svcParams =
+          svcParamsToPipe(recordToDelete.rData.svcParams) || "false";
+        break;
+      case "URI":
+        rdata.uriPriority = String(recordToDelete.rData.priority ?? "0");
+        rdata.uriWeight = String(recordToDelete.rData.weight ?? "0");
+        rdata.uri = String(recordToDelete.rData.uri || "");
+        break;
+      case "NAPTR":
+        rdata.naptrOrder = String(recordToDelete.rData.order ?? "0");
+        rdata.naptrPreference = String(recordToDelete.rData.preference ?? "0");
+        rdata.naptrFlags = String(recordToDelete.rData.flags || "");
+        rdata.naptrServices = String(recordToDelete.rData.services || "");
+        rdata.naptrRegexp = String(recordToDelete.rData.regexp || "");
+        rdata.naptrReplacement = String(
+          recordToDelete.rData.replacement || "",
+        );
         break;
     }
 
@@ -1871,18 +2632,7 @@ function ZoneRecordsView({
                 </Button>
                 <Button
                   onClick={handleAddRecord}
-                  disabled={
-                    isSubmitting ||
-                    !newRecord.name ||
-                    (newRecord.type === "APP"
-                      ? !newRecord.appName || !newRecord.classPath
-                      : newRecord.type === "SOA"
-                        ? !newRecord.primaryNameServer ||
-                          !newRecord.responsiblePerson
-                        : newRecord.type === "FWD"
-                          ? !newRecord.forwarder
-                          : !newRecord.value)
-                  }
+                  disabled={isSubmitting || !isAddFormComplete(newRecord)}
                 >
                   {isSubmitting ? "Adding..." : "Add Record"}
                 </Button>

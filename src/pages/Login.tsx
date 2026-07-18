@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
+import { ShieldCheck } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useAuth } from "@/context/AuthContext";
+import { getSsoStatus } from "@/api/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,8 +19,18 @@ export default function Login() {
   useDocumentTitle("Login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [totp, setTotp] = useState("");
+  const [needsTotp, setNeedsTotp] = useState(false);
+  // The SSO flow lands back on "/" with an error in the URL hash when the
+  // provider rejects the sign-in; surface it instead of dropping it.
+  const [error, setError] = useState(() => {
+    const hash = window.location.hash;
+    return hash.startsWith("#error=")
+      ? decodeURIComponent(hash.slice("#error=".length))
+      : "";
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [ssoEnabled, setSsoEnabled] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,17 +38,40 @@ export default function Login() {
   const from =
     (location.state as { from?: { pathname: string } })?.from?.pathname || "/";
 
+  useEffect(() => {
+    if (window.location.hash.startsWith("#error=")) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    let cancelled = false;
+    getSsoStatus()
+      .then((response) => {
+        if (!cancelled && response.ssoEnabled) setSsoEnabled(true);
+      })
+      .catch(() => {
+        // SSO status is best-effort; older servers may not support it.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsSubmitting(true);
 
-    const result = await login(username, password);
+    const result = await login(username, password, totp || undefined);
 
     if (result.success) {
       navigate(from, { replace: true });
+    } else if (result.requires2fa) {
+      setNeedsTotp(true);
+      if (result.error) setError(result.error);
     } else {
       setError(result.error || "Login failed");
+      // A failed password attempt restarts the flow.
+      setNeedsTotp(false);
+      setTotp("");
     }
 
     setIsSubmitting(false);
@@ -117,10 +152,58 @@ export default function Login() {
                 disabled={isSubmitting}
               />
             </div>
+            {needsTotp && (
+              <div className="space-y-2">
+                <Label htmlFor="totp">Authenticator Code</Label>
+                <Input
+                  id="totp"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="6-digit code"
+                  maxLength={6}
+                  value={totp}
+                  onChange={(e) =>
+                    setTotp(e.target.value.replace(/\D/g, ""))
+                  }
+                  required
+                  disabled={isSubmitting}
+                  autoFocus
+                  className="font-mono tracking-widest"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Two-factor authentication is enabled for this account.
+                </p>
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? "Signing in..." : "Sign in"}
             </Button>
           </form>
+          {ssoEnabled && (
+            <>
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-card px-2 text-muted-foreground">or</span>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={isSubmitting}
+                onClick={() => {
+                  window.location.href = "/sso/login";
+                }}
+              >
+                <ShieldCheck className="h-4 w-4 mr-2" />
+                Sign in with SSO
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

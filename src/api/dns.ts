@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { ApiResponse, DnsRecord, DnsServerInfo, DnsStatsResponse, Zone, ZoneListResponse, ZoneOptions, ZonePermissions, ZoneUserPermission, ZoneGroupPermission, RecordListResponse } from '@/types/api';
+import type { ApiResponse, DnsRecord, DnsServerInfo, DnsStatsResponse, TopStatsResponse, Zone, ZoneListResponse, ZoneOptions, ZonePermissions, ZoneUserPermission, ZoneGroupPermission, RecordListResponse } from '@/types/api';
 
 export async function getServerInfo(): Promise<ApiResponse<DnsServerInfo>> {
   return apiClient.get<DnsServerInfo>('/settings/get');
@@ -17,6 +17,32 @@ export async function getStats(
     if (options?.end) params.end = options.end;
   }
   return apiClient.get<DnsStatsResponse>('/dashboard/stats/get', params);
+}
+
+export type TopStatsType = 'TopClients' | 'TopDomains' | 'TopBlockedDomains';
+
+// Full top-N list for one stats type. The dashboard's inline lists from
+// stats/get are capped at 10 entries; this endpoint returns up to `limit`
+// (server default 1000). Custom start/end are ISO strings; the server parses
+// them as UTC (no `utc` param, unlike stats/get).
+export async function getTopStats(
+  statsType: TopStatsType,
+  type: StatsType = 'LastHour',
+  options?: {
+    start?: string;
+    end?: string;
+    limit?: number;
+    onlyRateLimitedClients?: boolean;
+  },
+): Promise<ApiResponse<TopStatsResponse>> {
+  const params: Record<string, string> = { type, statsType };
+  if (type === 'Custom') {
+    if (options?.start) params.start = options.start;
+    if (options?.end) params.end = options.end;
+  }
+  if (options?.limit !== undefined) params.limit = String(options.limit);
+  if (options?.onlyRateLimitedClients) params.onlyRateLimitedClients = 'true';
+  return apiClient.get<TopStatsResponse>('/dashboard/stats/getTop', params);
 }
 
 export async function listZones(options?: {

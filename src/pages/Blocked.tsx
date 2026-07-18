@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   Shield,
@@ -59,6 +59,7 @@ export default function Blocked() {
   useDocumentTitle('DNS Blocking');
   const [searchParams, setSearchParams] = useSearchParams();
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isCompiling, setIsCompiling] = useState(false);
   const [showBlockedLogsModal, setShowBlockedLogsModal] = useState(false);
   const currentTab = (searchParams.get('tab') as TabValue) || 'lists';
 
@@ -80,10 +81,11 @@ export default function Blocked() {
     refetch: refetchAllowed,
   } = useApi(() => listAllowedZones(), []);
 
-  const { data: statsData, isLoading: statsLoading } = useApi(
-    () => getStats('LastHour'),
-    []
-  );
+  const {
+    data: statsData,
+    isLoading: statsLoading,
+    refetch: refetchStats,
+  } = useApi(() => getStats('LastHour'), []);
 
   const blockedZones = useMemo(() => blockedData?.zones ?? [], [blockedData?.zones]);
   const allowedZones = useMemo(() => allowedData?.zones ?? [], [allowedData?.zones]);
@@ -97,6 +99,81 @@ export default function Blocked() {
   const tempDisabledUntil = settings?.temporaryDisableBlockingTill;
   const isTempDisabled = tempDisabledUntil && new Date(tempDisabledUntil) > new Date();
   const blockListCount = settings?.blockListUrls?.length ?? 0;
+
+  // After a forced update the server downloads and compiles the block lists in
+  // the background — a second for a cached list, but minutes for a large new one
+  // that has to be fetched first. Poll the stats until the domain count settles
+  // (or we hit a cap) so the "Domains in Block Lists" card reflects the new
+  // total without a manual refresh.
+  const statsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const blockListZonesRef = useRef(blockListZones);
+
+  useEffect(() => {
+    blockListZonesRef.current = blockListZones;
+  }, [blockListZones]);
+
+  const pollStats = useCallback(() => {
+    if (statsPollRef.current) clearInterval(statsPollRef.current);
+
+    const baseline = blockListZonesRef.current;
+    const startedAt = Date.now();
+    const POLL_INTERVAL_MS = 5000;
+    const SETTLE_MS = 8000; // stop once the count holds steady this long after changing
+    const SPINNER_MAX_MS = 45000; // hide the "Updating…" indicator after this even if nothing changed
+    const MAX_MS = 240000; // keep polling silently for slow server rebuilds (large list re-download), then give up
+    let lastValue = baseline;
+    let stableSince: number | null = null;
+
+    const stop = () => {
+      if (statsPollRef.current) clearInterval(statsPollRef.current);
+      statsPollRef.current = null;
+      setIsCompiling(false);
+    };
+
+    setIsCompiling(true);
+    statsPollRef.current = setInterval(async () => {
+      await refetchStats();
+      const current = blockListZonesRef.current;
+      const elapsed = Date.now() - startedAt;
+
+      if (current !== lastValue) {
+        lastValue = current;
+        stableSince = current !== baseline ? Date.now() : null;
+      } else if (current !== baseline && stableSince === null) {
+        stableSince = Date.now();
+      }
+
+      const settled = stableSince !== null && Date.now() - stableSince >= SETTLE_MS;
+
+      // Drop the spinner once the count settles or the bounded window elapses,
+      // even though the poll itself may keep running silently for a slow list.
+      if (settled || elapsed >= SPINNER_MAX_MS) setIsCompiling(false);
+      if (settled || elapsed >= MAX_MS) stop();
+    }, POLL_INTERVAL_MS);
+  }, [refetchStats]);
+
+  useEffect(
+    () => () => {
+      if (statsPollRef.current) clearInterval(statsPollRef.current);
+    },
+    []
+  );
+
+  // Adding/removing a list and the manual refresh all funnel through a forced
+  // server-side update + poll, so the compiled domain count reflects the change
+  // (the server doesn't recompile the zone just from a config edit). Returns
+  // whether the update was accepted.
+  const runBlockListUpdate = useCallback(async () => {
+    setIsUpdating(true);
+    const response = await forceUpdateBlockLists();
+    if (response.status === 'ok') {
+      pollStats();
+    } else {
+      toast.error(response.errorMessage || 'Failed to start block list update');
+    }
+    setIsUpdating(false);
+    return response.status === 'ok';
+  }, [pollStats]);
 
   const handleTabChange = (value: string) => {
     if (value === 'lists') {
@@ -132,16 +209,11 @@ export default function Blocked() {
 
   // Force update handler
   const handleForceUpdate = useCallback(async () => {
-    setIsUpdating(true);
-    const response = await forceUpdateBlockLists();
-    if (response.status === 'ok') {
+    if (await runBlockListUpdate()) {
       toast.success('Block lists update started');
       refetchSettings();
-    } else {
-      toast.error(response.errorMessage || 'Failed to start block list update');
     }
-    setIsUpdating(false);
-  }, [refetchSettings]);
+  }, [runBlockListUpdate, refetchSettings]);
 
   // Block list URL handlers
   const handleAddBlockListUrl = useCallback(async (url: string) => {
@@ -149,27 +221,34 @@ export default function Blocked() {
     const response = await updateBlockingSettings({
       blockListUrls: [...currentUrls, url],
     });
-    if (response.status === 'ok') {
-      toast.success('Block list added');
-      refetchSettings();
-    } else {
+    if (response.status !== 'ok') {
       toast.error(response.errorMessage || 'Failed to add block list');
       throw new Error(response.errorMessage || 'Failed to add block list');
     }
-  }, [settings, refetchSettings]);
+    toast.success('Block list added');
+
+    // Saving the URL doesn't download or compile it — kick off an update so the
+    // new list takes effect (and the domain count reflects it) right away.
+    await runBlockListUpdate();
+    refetchSettings();
+  }, [settings, refetchSettings, runBlockListUpdate]);
 
   const handleRemoveBlockListUrl = useCallback(async (url: string) => {
     const currentUrls = settings?.blockListUrls ?? [];
     const response = await updateBlockingSettings({
       blockListUrls: currentUrls.filter((u) => u !== url),
     });
-    if (response.status === 'ok') {
-      toast.success('Block list removed');
-      refetchSettings();
-    } else {
+    if (response.status !== 'ok') {
       toast.error(response.errorMessage || 'Failed to remove block list');
+      return;
     }
-  }, [settings, refetchSettings]);
+    toast.success('Block list removed');
+
+    // Removing a URL doesn't recompile the zone on its own — trigger an update
+    // so the removed list's domains drop out of the count.
+    await runBlockListUpdate();
+    refetchSettings();
+  }, [settings, refetchSettings, runBlockListUpdate]);
 
   const handleUpdateInterval = useCallback(async (hours: number) => {
     const response = await updateBlockingSettings({
@@ -382,7 +461,7 @@ export default function Blocked() {
                       Blocked (Last Hour)
                     </span>
                   </div>
-                  {statsLoading ? (
+                  {statsLoading && !statsData ? (
                     <Skeleton className="h-8 w-20" />
                   ) : (
                     <div className="text-2xl font-bold text-red-900 dark:text-red-50">
@@ -398,7 +477,7 @@ export default function Blocked() {
                       Domains in Block Lists
                     </span>
                   </div>
-                  {statsLoading ? (
+                  {statsLoading && !statsData ? (
                     <Skeleton className="h-8 w-20" />
                   ) : (
                     <div className="text-2xl font-bold text-blue-900 dark:text-blue-50">
@@ -414,7 +493,7 @@ export default function Blocked() {
                       Active Block Lists
                     </span>
                   </div>
-                  {settingsLoading ? (
+                  {settingsLoading && !blockingSettings ? (
                     <Skeleton className="h-8 w-20" />
                   ) : (
                     <div className="text-2xl font-bold text-purple-900 dark:text-purple-50">
@@ -453,10 +532,12 @@ export default function Blocked() {
                   variant="outline"
                   size="sm"
                   onClick={handleForceUpdate}
-                  disabled={isUpdating || settingsLoading || blockListCount === 0}
+                  disabled={isUpdating || isCompiling || settingsLoading || blockListCount === 0}
                 >
-                  <RefreshCw className={`h-4 w-4 mr-2 ${isUpdating ? 'animate-spin' : ''}`} />
-                  Update Block Lists
+                  <RefreshCw
+                    className={`h-4 w-4 mr-2 ${isUpdating || isCompiling ? 'animate-spin' : ''}`}
+                  />
+                  {isUpdating || isCompiling ? 'Updating…' : 'Update Block Lists'}
                 </Button>
 
                 {settings?.blockListNextUpdatedOn && blockListCount > 0 && (
