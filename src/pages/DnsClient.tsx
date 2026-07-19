@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   XCircle,
   X,
+  ChevronsUpDown,
   type LucideIcon,
 } from 'lucide-react';
 import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
@@ -30,13 +31,24 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
-  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import {
   Dialog,
   DialogContent,
@@ -49,6 +61,7 @@ import { CopyableText } from '@/components/ui/copyable-text';
 import { resolveDns, type DnsQueryResult } from '@/api/dnsClient';
 import { getClusterState } from '@/api/cluster';
 import { useApi } from '@/hooks/useApi';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const RECORD_TYPES = [
@@ -78,7 +91,126 @@ const PUBLIC_SERVERS = [
   { value: '1.1.1.1', label: 'Cloudflare (1.1.1.1)' },
   { value: '8.8.8.8', label: 'Google (8.8.8.8)' },
   { value: '9.9.9.9', label: 'Quad9 (9.9.9.9)' },
+  { value: '208.67.222.222', label: 'OpenDNS (208.67.222.222)' },
+  { value: '94.140.14.14', label: 'AdGuard (94.140.14.14)' },
 ];
+
+// The 13 root servers, in Technitium's "name (ip)" server-address format.
+// Note b.root-servers.net moved to 170.247.170.2 in 2023.
+const ROOT_SERVERS = [
+  'a.root-servers.net (198.41.0.4)',
+  'b.root-servers.net (170.247.170.2)',
+  'c.root-servers.net (192.33.4.12)',
+  'd.root-servers.net (199.7.91.13)',
+  'e.root-servers.net (192.203.230.10)',
+  'f.root-servers.net (192.5.5.241)',
+  'g.root-servers.net (192.112.36.4)',
+  'h.root-servers.net (198.97.190.53)',
+  'i.root-servers.net (192.36.148.17)',
+  'j.root-servers.net (192.58.128.30)',
+  'k.root-servers.net (193.0.14.129)',
+  'l.root-servers.net (199.7.83.42)',
+  'm.root-servers.net (202.12.27.33)',
+].map((value) => ({ value, label: value }));
+
+type ServerOption = { value: string; label: string };
+type ServerGroup = { heading: string; options: ServerOption[] };
+
+// A searchable combobox rather than a Select: with the root servers included the
+// list runs past 25 entries, which is well past where a scroll-only dropdown is
+// usable. Typing filters across both the label and the address, so "adguard",
+// "94.140" and "k.root" all land on the right entry.
+function ServerPicker({
+  id,
+  className,
+  value,
+  label,
+  groups,
+  customServer,
+  onSelect,
+  onEditCustom,
+}: {
+  id?: string;
+  className?: string;
+  value: string;
+  label: string;
+  groups: ServerGroup[];
+  customServer: string;
+  onSelect: (value: string) => void;
+  onEditCustom: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const choose = (next: string) => {
+    onSelect(next);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          id={id}
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn('justify-between font-normal', className)}
+        >
+          <span className="truncate">{label}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-72 p-0">
+        <Command>
+          <CommandInput placeholder="Search servers..." />
+          <CommandList>
+            <CommandEmpty>No server found.</CommandEmpty>
+            {groups.map((group) => (
+              <CommandGroup key={group.heading} heading={group.heading}>
+                {group.options.map((s) => (
+                  <CommandItem
+                    // cmdk matches on this string, so both the friendly name and
+                    // the address are searchable. Selection goes through the
+                    // closure below, since cmdk lowercases the onSelect argument.
+                    key={s.value}
+                    value={`${s.label} ${s.value}`}
+                    onSelect={() => choose(s.value)}
+                  >
+                    <Check
+                      className={cn('mr-2 h-4 w-4 shrink-0', value === s.value ? 'opacity-100' : 'opacity-0')}
+                    />
+                    <span className="truncate">{s.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+            <CommandSeparator />
+            <CommandGroup heading="Custom">
+              {customServer && (
+                <CommandItem value={`custom ${customServer}`} onSelect={() => choose('custom')}>
+                  <Check
+                    className={cn('mr-2 h-4 w-4 shrink-0', value === 'custom' ? 'opacity-100' : 'opacity-0')}
+                  />
+                  <span className="truncate">{customServer}</span>
+                </CommandItem>
+              )}
+              <CommandItem
+                value="custom server address"
+                onSelect={() => {
+                  onEditCustom();
+                  setOpen(false);
+                }}
+              >
+                <span className="ml-6 truncate">
+                  {customServer ? 'Edit custom server...' : 'Custom...'}
+                </span>
+              </CommandItem>
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function DnsClient() {
   useDocumentTitle("DNS Client");
@@ -100,24 +232,18 @@ export default function DnsClient() {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // "custom" is the sentinel select value for the user-defined target; the
-  // "__set_custom__" item is an action row that opens the editor dialog instead
-  // of becoming a selectable value.
+  // "custom" is the sentinel picker value for the user-defined target; the
+  // editor is opened by its own action row rather than by selecting a value.
   const isCustom = server === 'custom';
   const customServer =
     customName.trim() && customIp.trim()
       ? `${customName.trim()} (${customIp.trim()})`
       : customIp.trim() || customName.trim();
-  const hasCustom = customServer.length > 0;
 
-  const handleServerChange = (value: string) => {
-    if (value === '__set_custom__') {
-      setDraftName(customName);
-      setDraftIp(customIp);
-      setCustomDialogOpen(true);
-      return;
-    }
-    setServer(value);
+  const openCustomDialog = () => {
+    setDraftName(customName);
+    setDraftIp(customIp);
+    setCustomDialogOpen(true);
   };
 
   const applyCustom = () => {
@@ -143,42 +269,23 @@ export default function DnsClient() {
       });
   }, [clusterState]);
 
-  // With cluster nodes present the list is sectioned, so the public resolvers
-  // get their own heading — otherwise they'd read as part of "Cluster Nodes".
-  // Single-server users keep the original flat, unlabeled list.
-  const hasClusterNodes = clusterServers.length > 0;
-  const serverOptions = (
-    <>
-      {LOCAL_SERVERS.map((s) => (
-        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-      ))}
-      {hasClusterNodes && (
-        <SelectGroup>
-          <SelectLabel>Cluster Nodes</SelectLabel>
-          {clusterServers.map((s) => (
-            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-          ))}
-        </SelectGroup>
-      )}
-      {hasClusterNodes ? (
-        <SelectGroup>
-          <SelectLabel>Public Resolvers</SelectLabel>
-          {PUBLIC_SERVERS.map((s) => (
-            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-          ))}
-        </SelectGroup>
-      ) : (
-        PUBLIC_SERVERS.map((s) => (
-          <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-        ))
-      )}
-      <SelectSeparator />
-      {hasCustom && <SelectItem value="custom">{customServer}</SelectItem>}
-      <SelectItem value="__set_custom__">
-        {hasCustom ? 'Edit custom server…' : 'Custom…'}
-      </SelectItem>
-    </>
+  // Every section is headed now — with the root servers in the list there are
+  // too many entries for an unlabeled run to stay readable.
+  const serverGroups = useMemo<ServerGroup[]>(
+    () => [
+      { heading: 'Local', options: LOCAL_SERVERS },
+      ...(clusterServers.length > 0
+        ? [{ heading: 'Cluster Nodes', options: clusterServers }]
+        : []),
+      { heading: 'Public Resolvers', options: PUBLIC_SERVERS },
+      { heading: 'Root Servers', options: ROOT_SERVERS },
+    ],
+    [clusterServers]
   );
+
+  const serverLabel = isCustom
+    ? customServer
+    : serverGroups.flatMap((g) => g.options).find((s) => s.value === server)?.label ?? server;
 
   const handleQuery = async (typeOverride?: string) => {
     if (!domain.trim()) {
@@ -519,14 +626,16 @@ export default function DnsClient() {
                 {/* Server */}
                 <div className="space-y-1.5">
                   <Label htmlFor="server-mobile" className="text-xs text-muted-foreground">Server</Label>
-                  <Select value={server} onValueChange={handleServerChange}>
-                    <SelectTrigger id="server-mobile" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {serverOptions}
-                    </SelectContent>
-                  </Select>
+                  <ServerPicker
+                    id="server-mobile"
+                    className="w-full"
+                    value={server}
+                    label={serverLabel}
+                    groups={serverGroups}
+                    customServer={customServer}
+                    onSelect={setServer}
+                    onEditCustom={openCustomDialog}
+                  />
                 </div>
 
                 {/* Protocol + EDNS */}
@@ -617,14 +726,15 @@ export default function DnsClient() {
 
                 {/* Server + Protocol + EDNS + DNSSEC */}
                 <div className="flex gap-3 items-center flex-wrap">
-                  <Select value={server} onValueChange={handleServerChange}>
-                    <SelectTrigger className="w-44">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {serverOptions}
-                    </SelectContent>
-                  </Select>
+                  <ServerPicker
+                    className="w-44"
+                    value={server}
+                    label={serverLabel}
+                    groups={serverGroups}
+                    customServer={customServer}
+                    onSelect={setServer}
+                    onEditCustom={openCustomDialog}
+                  />
                   <Select value={protocol} onValueChange={(v: typeof protocol) => setProtocol(v)}>
                     <SelectTrigger className="w-24">
                       <SelectValue />
