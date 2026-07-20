@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Trash2, Plus, ChevronRight } from 'lucide-react';
 import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -71,7 +71,7 @@ export default function Groups({ onDataLoaded }: GroupsProps) {
   const [editMembers, setEditMembers] = useState<string[]>([]);
   const [memberFilter, setMemberFilter] = useState('');
 
-  const fetchGroups = async () => {
+  const fetchGroups = useCallback(async () => {
     setLoading(true);
     try {
       const response = await listGroups();
@@ -102,9 +102,9 @@ export default function Groups({ onDataLoaded }: GroupsProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [onDataLoaded]);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const response = await listUsers();
       if (response.status === 'ok' && response.response) {
@@ -113,12 +113,12 @@ export default function Groups({ onDataLoaded }: GroupsProps) {
     } catch (error) {
       console.error('Failed to fetch users:', error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchGroups();
     fetchUsers();
-  }, []);
+  }, [fetchGroups, fetchUsers]);
 
   const handleAddGroup = async () => {
     if (!newName.trim()) {

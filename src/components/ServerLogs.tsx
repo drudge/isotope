@@ -40,6 +40,69 @@ import {
 } from "@/api/serverLogs";
 import { toast } from "sonner";
 
+// Group log lines, combining errors with their stack traces
+type LogEntry = {
+  line: string;
+  timestamp?: string;
+  ipPort?: string;
+  user?: string;
+  message?: string;
+  isError: boolean;
+  stackTrace?: string[];
+};
+
+const parseLogEntries = (lines: string[]): LogEntry[] => {
+  const entries: LogEntry[] = [];
+  let currentEntry: LogEntry | null = null;
+
+  for (const line of lines) {
+    // Match pattern: [2026-01-26 01:36:57 Local] [IP:port] [user] message
+    const mainMatch = line.match(
+      /^\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+\w+)\]\s*(?:\[([^\]]+)\])?\s*(?:\[([^\]]+)\])?\s*(.*)$/,
+    );
+
+    if (mainMatch) {
+      // Save previous entry
+      if (currentEntry) {
+        entries.push(currentEntry);
+      }
+
+      const [, timestamp, ipPort, user, message] = mainMatch;
+      const isError =
+        message?.toLowerCase().includes("exception") ||
+        message?.toLowerCase().includes("error") ||
+        message?.toLowerCase().includes("cannot");
+
+      currentEntry = {
+        line,
+        timestamp,
+        ipPort,
+        user,
+        message,
+        isError,
+        stackTrace: [],
+      };
+    } else if (line.match(/^\s+at\s/) && currentEntry) {
+      // Stack trace line - add to current entry
+      currentEntry.stackTrace?.push(line);
+    } else {
+      // Other line
+      if (currentEntry) {
+        entries.push(currentEntry);
+        currentEntry = null;
+      }
+      entries.push({ line, isError: false });
+    }
+  }
+
+  // Don't forget the last entry
+  if (currentEntry) {
+    entries.push(currentEntry);
+  }
+
+  return entries;
+};
+
 export default function ServerLogs() {
   const [logs, setLogs] = useState<LogFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -180,69 +243,6 @@ export default function ServerLogs() {
       }
       return next;
     });
-  };
-
-  // Group log lines, combining errors with their stack traces
-  type LogEntry = {
-    line: string;
-    timestamp?: string;
-    ipPort?: string;
-    user?: string;
-    message?: string;
-    isError: boolean;
-    stackTrace?: string[];
-  };
-
-  const parseLogEntries = (lines: string[]): LogEntry[] => {
-    const entries: LogEntry[] = [];
-    let currentEntry: LogEntry | null = null;
-
-    for (const line of lines) {
-      // Match pattern: [2026-01-26 01:36:57 Local] [IP:port] [user] message
-      const mainMatch = line.match(
-        /^\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+\w+)\]\s*(?:\[([^\]]+)\])?\s*(?:\[([^\]]+)\])?\s*(.*)$/,
-      );
-
-      if (mainMatch) {
-        // Save previous entry
-        if (currentEntry) {
-          entries.push(currentEntry);
-        }
-
-        const [, timestamp, ipPort, user, message] = mainMatch;
-        const isError =
-          message?.toLowerCase().includes("exception") ||
-          message?.toLowerCase().includes("error") ||
-          message?.toLowerCase().includes("cannot");
-
-        currentEntry = {
-          line,
-          timestamp,
-          ipPort,
-          user,
-          message,
-          isError,
-          stackTrace: [],
-        };
-      } else if (line.match(/^\s+at\s/) && currentEntry) {
-        // Stack trace line - add to current entry
-        currentEntry.stackTrace?.push(line);
-      } else {
-        // Other line
-        if (currentEntry) {
-          entries.push(currentEntry);
-          currentEntry = null;
-        }
-        entries.push({ line, isError: false });
-      }
-    }
-
-    // Don't forget the last entry
-    if (currentEntry) {
-      entries.push(currentEntry);
-    }
-
-    return entries;
   };
 
   const logLines = useMemo(() => logContent.split("\n"), [logContent]);

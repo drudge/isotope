@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from 'react';
 import { ChevronRight, Plus, X } from "lucide-react";
 import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { Card, CardContent } from "@/components/ui/card";
@@ -74,7 +74,7 @@ export default function Permissions({ onDataLoaded }: PermissionsProps) {
   const [userPickerFilter, setUserPickerFilter] = useState("");
   const [groupPickerFilter, setGroupPickerFilter] = useState("");
 
-  const fetchPermissions = async () => {
+  const fetchPermissions = useCallback(async () => {
     setLoading(true);
     try {
       const response = await listPermissions();
@@ -91,11 +91,11 @@ export default function Permissions({ onDataLoaded }: PermissionsProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [onDataLoaded]);
 
   useEffect(() => {
     fetchPermissions();
-  }, []);
+  }, [fetchPermissions]);
 
   const openEditDialog = async (permission: Permission) => {
     try {

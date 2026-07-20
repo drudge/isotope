@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Trash2, Plus, ChevronRight } from 'lucide-react';
 import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -70,7 +70,7 @@ export default function Users({ onDataLoaded }: UsersProps) {
   const [editDisabled, setEditDisabled] = useState(false);
   const [editMemberOfGroups, setEditMemberOfGroups] = useState<string[]>([]);
 
-  const fetchGroupMemberships = async () => {
+  const fetchGroupMemberships = useCallback(async () => {
     try {
       const groupsResponse = await listGroups();
       if (groupsResponse.status === 'ok' && groupsResponse.response) {
@@ -94,9 +94,9 @@ export default function Users({ onDataLoaded }: UsersProps) {
     } catch (error) {
       console.error('Failed to fetch group memberships:', error);
     }
-  };
+  }, []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const response = await listUsers();
@@ -113,12 +113,12 @@ export default function Users({ onDataLoaded }: UsersProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [onDataLoaded]);
 
   useEffect(() => {
     fetchUsers();
     fetchGroupMemberships();
-  }, []);
+  }, [fetchUsers, fetchGroupMemberships]);
 
   const handleAddUser = async () => {
     if (!newUsername.trim()) {

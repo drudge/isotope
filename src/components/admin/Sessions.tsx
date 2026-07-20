@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Trash2, Plus, Copy, Check } from 'lucide-react';
 import { IsotopeSpinner } from '@/components/ui/isotope-spinner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -56,7 +56,7 @@ export default function Sessions({ onDataLoaded }: SessionsProps) {
   const [generatedToken, setGeneratedToken] = useState<string | null>(null);
   const [tokenCopied, setTokenCopied] = useState(false);
 
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     setLoading(true);
     try {
       const response = await listSessions();
@@ -73,11 +73,11 @@ export default function Sessions({ onDataLoaded }: SessionsProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [onDataLoaded]);
 
   useEffect(() => {
     fetchSessions();
-  }, []);
+  }, [fetchSessions]);
 
   const handleDelete = async (partialToken: string) => {
     try {
