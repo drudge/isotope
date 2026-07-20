@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -51,9 +51,19 @@ export default function Administration() {
     fetchCounts();
   }, []);
 
-  const updateCount = (key: keyof StatCounts) => (count: number) => {
-    setCounts((prev) => ({ ...prev, [key]: count }));
-  };
+  // Stable per-key callbacks: the children depend on these in their fetch
+  // effects, so a fresh identity each render would retrigger the fetch.
+  const updateCount = useMemo(() => {
+    const make = (key: keyof StatCounts) => (count: number) => {
+      setCounts((prev) => ({ ...prev, [key]: count }));
+    };
+    return {
+      users: make('users'),
+      groups: make('groups'),
+      permissions: make('permissions'),
+      sessions: make('sessions'),
+    };
+  }, []);
 
   const tabBadge = (key: keyof StatCounts) => {
     const count = counts[key];
@@ -83,19 +93,19 @@ export default function Administration() {
         </TabsList>
 
         <TabsContent value="users" className="flex-1 mt-4">
-          <Users onDataLoaded={updateCount('users')} />
+          <Users onDataLoaded={updateCount.users} />
         </TabsContent>
 
         <TabsContent value="groups" className="flex-1 mt-4">
-          <Groups onDataLoaded={updateCount('groups')} />
+          <Groups onDataLoaded={updateCount.groups} />
         </TabsContent>
 
         <TabsContent value="permissions" className="flex-1 mt-4">
-          <Permissions onDataLoaded={updateCount('permissions')} />
+          <Permissions onDataLoaded={updateCount.permissions} />
         </TabsContent>
 
         <TabsContent value="sessions" className="flex-1 mt-4">
-          <Sessions onDataLoaded={updateCount('sessions')} />
+          <Sessions onDataLoaded={updateCount.sessions} />
         </TabsContent>
       </Tabs>
     </div>
